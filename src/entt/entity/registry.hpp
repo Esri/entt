@@ -1835,6 +1835,17 @@ public:
         return const_cast<Type &>(std::as_const(*this).template ctx<Type>());
     }
 
+    /**
+     * @brief Returns a reference to the registry's storage for a given component type
+     */
+    template<typename Component>
+    storage<Entity, Component>& component_pool()
+    {
+      const auto ctype = to_integer(type<Component>());
+      sparse_set<Entity>& pool = *(pools[ctype].pool.get());
+      return static_cast<storage<Entity, Component>&>(pool);
+    }
+
 private:
     mutable std::size_t skip_family_pools{};
     mutable std::vector<pool_data> pools{};
