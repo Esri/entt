@@ -21,16 +21,11 @@ install(
     DESTINATION share/${PROJECT_NAME}-${PROJECT_VERSION}/
 )
 
+FILE(GLOB MD_FILES md/*.md)
+
 add_custom_target(
     docs_aob
     SOURCES
-        CONTRIBUTING.md
-        core.md
-        entity.md
-        locator.md
-        process.md
-        resource.md
-        shared.md
-        signal.md
-        extra.dox
+        dox/extra.dox
+        ${MD_FILES}
 )

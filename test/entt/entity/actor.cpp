@@ -3,66 +3,82 @@
 #include <entt/entity/actor.hpp>
 #include <entt/entity/registry.hpp>
 
-struct ActorComponent final {};
-struct ActorTag final {};
-
 TEST(Actor, Component) {
-    entt::DefaultRegistry registry;
-    entt::DefaultActor actor{registry};
-    const auto &cactor = actor;
+    entt::registry registry;
+    entt::actor actor{registry};
 
-    ASSERT_EQ(&registry, &actor.registry());
-    ASSERT_EQ(&registry, &cactor.registry());
-    ASSERT_TRUE(registry.empty<ActorComponent>());
+    ASSERT_EQ(&registry, &actor.backend());
+    ASSERT_EQ(&registry, &std::as_const(actor).backend());
+    ASSERT_TRUE(registry.empty<int>());
     ASSERT_FALSE(registry.empty());
-    ASSERT_FALSE(actor.has<ActorComponent>());
+    ASSERT_FALSE(actor.has<int>());
 
-    const auto &component = actor.assign<ActorComponent>();
+    const auto &cint = actor.assign<int>();
+    const auto &cchar = actor.assign<char>();
 
-    ASSERT_EQ(&component, &actor.get<ActorComponent>());
-    ASSERT_EQ(&component, &cactor.get<ActorComponent>());
-    ASSERT_FALSE(registry.empty<ActorComponent>());
+    ASSERT_EQ(&cint, &actor.get<int>());
+    ASSERT_EQ(&cchar, &std::as_const(actor).get<char>());
+    ASSERT_EQ(&cint, &std::get<0>(actor.get<int, char>()));
+    ASSERT_EQ(&cchar, &std::get<1>(actor.get<int, char>()));
+    ASSERT_EQ(&cint, std::get<0>(actor.try_get<int, char, double>()));
+    ASSERT_EQ(&cchar, std::get<1>(actor.try_get<int, char, double>()));
+    ASSERT_EQ(nullptr, std::get<2>(actor.try_get<int, char, double>()));
+    ASSERT_EQ(nullptr, actor.try_get<double>());
+    ASSERT_EQ(&cchar, actor.try_get<char>());
+    ASSERT_EQ(&cint, actor.try_get<int>());
+
+    ASSERT_FALSE(registry.empty<int>());
     ASSERT_FALSE(registry.empty());
-    ASSERT_TRUE(actor.has<ActorComponent>());
+    ASSERT_TRUE((actor.has<int, char>()));
+    ASSERT_FALSE(actor.has<double>());
 
-    actor.remove<ActorComponent>();
+    actor.remove<int>();
 
-    ASSERT_TRUE(registry.empty<ActorComponent>());
+    ASSERT_TRUE(registry.empty<int>());
     ASSERT_FALSE(registry.empty());
-    ASSERT_FALSE(actor.has<ActorComponent>());
+    ASSERT_FALSE(actor.has<int>());
 }
 
-TEST(Actor, Tag) {
-    entt::DefaultRegistry registry;
-    entt::DefaultActor actor{registry};
-    const auto &cactor = actor;
+TEST(Actor, FromEntity) {
+    entt::registry registry;
+    const auto entity = registry.create();
 
-    ASSERT_EQ(&registry, &actor.registry());
-    ASSERT_EQ(&registry, &cactor.registry());
-    ASSERT_FALSE(registry.has<ActorTag>());
-    ASSERT_FALSE(actor.has<ActorTag>(entt::tag_t{}));
+    registry.assign<int>(entity, 42);
+    registry.assign<char>(entity, 'c');
 
-    const auto &tag = actor.assign<ActorTag>(entt::tag_t{});
+    entt::actor actor{entity, registry};
 
-    ASSERT_EQ(&tag, &actor.get<ActorTag>(entt::tag_t{}));
-    ASSERT_EQ(&tag, &cactor.get<ActorTag>(entt::tag_t{}));
-    ASSERT_TRUE(registry.has<ActorTag>());
-    ASSERT_FALSE(registry.empty());
-    ASSERT_TRUE(actor.has<ActorTag>(entt::tag_t{}));
-
-    actor.remove<ActorTag>(entt::tag_t{});
-
-    ASSERT_FALSE(registry.has<ActorTag>());
-    ASSERT_FALSE(registry.empty());
-    ASSERT_FALSE(actor.has<ActorTag>(entt::tag_t{}));
+    ASSERT_TRUE(actor);
+    ASSERT_EQ(entity, actor.entity());
+    ASSERT_TRUE((actor.has<int, char>()));
+    ASSERT_EQ(actor.get<int>(), 42);
+    ASSERT_EQ(actor.get<char>(), 'c');
 }
 
 TEST(Actor, EntityLifetime) {
-    entt::DefaultRegistry registry;
-    auto *actor = new entt::DefaultActor{registry};
-    actor->assign<ActorComponent>();
+    entt::registry registry;
+    entt::actor actor{};
 
-    ASSERT_FALSE(registry.empty<ActorComponent>());
+    ASSERT_FALSE(actor);
+
+    actor = entt::actor{registry};
+    actor.assign<int>();
+
+    ASSERT_TRUE(actor);
+    ASSERT_FALSE(registry.empty<int>());
+    ASSERT_FALSE(registry.empty());
+
+    registry.destroy(actor.entity());
+
+    ASSERT_FALSE(actor);
+}
+
+TEST(Actor, ActorLifetime) {
+    entt::registry registry;
+    auto *actor = new entt::actor{registry};
+    actor->assign<int>();
+
+    ASSERT_FALSE(registry.empty<int>());
     ASSERT_FALSE(registry.empty());
 
     registry.each([actor](const auto entity) {
@@ -71,6 +87,6 @@ TEST(Actor, EntityLifetime) {
 
     delete actor;
 
-    ASSERT_TRUE(registry.empty<ActorComponent>());
+    ASSERT_TRUE(registry.empty<int>());
     ASSERT_TRUE(registry.empty());
 }

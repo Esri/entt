@@ -2,19 +2,42 @@
 #define ENTT_ENTITY_UTILITY_HPP
 
 
+#include "../core/type_traits.hpp"
+
+
 namespace entt {
 
 
-/*! @brief Tag class type used to disambiguate overloads. */
-struct tag_t final {};
+/**
+ * @brief Alias for exclusion lists.
+ * @tparam Type List of types.
+ */
+template<typename... Type>
+struct exclude_t: type_list<Type...> {};
 
 
-/*! @brief Persistent view type used to disambiguate overloads. */
-struct persistent_t final {};
+/**
+ * @brief Variable template for exclusion lists.
+ * @tparam Type List of types.
+ */
+template<typename... Type>
+constexpr exclude_t<Type...> exclude{};
 
 
-/*! @brief Raw view type used to disambiguate overloads. */
-struct raw_t final {};
+/**
+ * @brief Alias for lists of observed components.
+ * @tparam Type List of types.
+ */
+template<typename... Type>
+struct get_t: type_list<Type...>{};
+
+
+/**
+ * @brief Variable template for lists of observed components.
+ * @tparam Type List of types.
+ */
+template<typename... Type>
+constexpr get_t<Type...> get{};
 
 
 }

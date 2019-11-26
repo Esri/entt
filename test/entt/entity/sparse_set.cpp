@@ -1,79 +1,156 @@
-#include <unordered_set>
+#include <cstdint>
+#include <utility>
+#include <iterator>
+#include <algorithm>
+#include <functional>
+#include <type_traits>
 #include <gtest/gtest.h>
 #include <entt/entity/sparse_set.hpp>
+#include <entt/entity/fwd.hpp>
 
-TEST(SparseSetNoType, Functionalities) {
-    entt::SparseSet<std::uint64_t> set;
-    const auto &cset = set;
+struct empty_type {};
+struct boxed_int { int value; };
+
+TEST(SparseSet, Functionalities) {
+    entt::sparse_set<entt::entity> set;
 
     set.reserve(42);
 
     ASSERT_EQ(set.capacity(), 42);
     ASSERT_TRUE(set.empty());
     ASSERT_EQ(set.size(), 0u);
-    ASSERT_EQ(cset.begin(), cset.end());
+    ASSERT_EQ(std::as_const(set).begin(), std::as_const(set).end());
     ASSERT_EQ(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_FALSE(set.has(42));
+    ASSERT_FALSE(set.has(entt::entity{0}));
+    ASSERT_FALSE(set.has(entt::entity{42}));
 
-    set.construct(42);
+    set.construct(entt::entity{42});
 
-    ASSERT_EQ(set.get(42), 0u);
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
 
     ASSERT_FALSE(set.empty());
     ASSERT_EQ(set.size(), 1u);
-    ASSERT_NE(cset.begin(), cset.end());
+    ASSERT_NE(std::as_const(set).begin(), std::as_const(set).end());
     ASSERT_NE(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_TRUE(set.has(42));
-    ASSERT_TRUE(set.fast(42));
-    ASSERT_EQ(set.get(42), 0u);
+    ASSERT_FALSE(set.has(entt::entity{0}));
+    ASSERT_TRUE(set.has(entt::entity{42}));
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
 
-    set.destroy(42);
-
-    ASSERT_TRUE(set.empty());
-    ASSERT_EQ(set.size(), 0u);
-    ASSERT_EQ(cset.begin(), cset.end());
-    ASSERT_EQ(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_FALSE(set.has(42));
-
-    set.construct(42);
-
-    ASSERT_EQ(set.get(42), 0u);
-
-    set.reset();
+    set.destroy(entt::entity{42});
 
     ASSERT_TRUE(set.empty());
     ASSERT_EQ(set.size(), 0u);
-    ASSERT_EQ(cset.begin(), cset.end());
+    ASSERT_EQ(std::as_const(set).begin(), std::as_const(set).end());
     ASSERT_EQ(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_FALSE(set.has(42));
+    ASSERT_FALSE(set.has(entt::entity{0}));
+    ASSERT_FALSE(set.has(entt::entity{42}));
 
-    (void)entt::SparseSet<std::uint64_t>{std::move(set)};
-    entt::SparseSet<std::uint64_t> other;
+    set.construct(entt::entity{42});
+
+    ASSERT_FALSE(set.empty());
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+
+    ASSERT_TRUE(std::is_move_constructible_v<decltype(set)>);
+    ASSERT_TRUE(std::is_move_assignable_v<decltype(set)>);
+
+    entt::sparse_set<entt::entity> cpy{set};
+    set = cpy;
+
+    ASSERT_FALSE(set.empty());
+    ASSERT_FALSE(cpy.empty());
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+    ASSERT_EQ(cpy.index(entt::entity{42}), 0u);
+
+    entt::sparse_set<entt::entity> other{std::move(set)};
+
+    set = std::move(other);
     other = std::move(set);
+
+    ASSERT_TRUE(set.empty());
+    ASSERT_FALSE(other.empty());
+    ASSERT_EQ(other.index(entt::entity{42}), 0u);
+
+    other.reset();
+
+    ASSERT_TRUE(other.empty());
+    ASSERT_EQ(other.size(), 0u);
+    ASSERT_EQ(std::as_const(other).begin(), std::as_const(other).end());
+    ASSERT_EQ(other.begin(), other.end());
+    ASSERT_FALSE(other.has(entt::entity{0}));
+    ASSERT_FALSE(other.has(entt::entity{42}));
 }
 
-TEST(SparseSetNoType, ElementAccess) {
-    entt::SparseSet<std::uint64_t> set;
-    const auto &cset = set;
+TEST(SparseSet, Pagination) {
+    entt::sparse_set<entt::entity> set;
+    constexpr auto entt_per_page = ENTT_PAGE_SIZE / sizeof(std::underlying_type_t<entt::entity>);
 
-    set.construct(42);
-    set.construct(3);
+    ASSERT_EQ(set.extent(), 0);
 
-    for(typename entt::SparseSet<std::uint64_t>::size_type i{}; i < set.size(); ++i) {
-        ASSERT_EQ(set[i], i ? 42 : 3);
-        ASSERT_EQ(cset[i], i ? 42 : 3);
-    }
+    set.construct(entt::entity{entt_per_page-1});
+
+    ASSERT_EQ(set.extent(), entt_per_page);
+    ASSERT_TRUE(set.has(entt::entity{entt_per_page-1}));
+
+    set.construct(entt::entity{entt_per_page});
+
+    ASSERT_EQ(set.extent(), 2 * entt_per_page);
+    ASSERT_TRUE(set.has(entt::entity{entt_per_page-1}));
+    ASSERT_TRUE(set.has(entt::entity{entt_per_page}));
+    ASSERT_FALSE(set.has(entt::entity{entt_per_page+1}));
+
+    set.destroy(entt::entity{entt_per_page-1});
+
+    ASSERT_EQ(set.extent(), 2 * entt_per_page);
+    ASSERT_FALSE(set.has(entt::entity{entt_per_page-1}));
+    ASSERT_TRUE(set.has(entt::entity{entt_per_page}));
+
+    set.shrink_to_fit();
+    set.destroy(entt::entity{entt_per_page});
+
+    ASSERT_EQ(set.extent(), 2 * entt_per_page);
+    ASSERT_FALSE(set.has(entt::entity{entt_per_page-1}));
+    ASSERT_FALSE(set.has(entt::entity{entt_per_page}));
+
+    set.shrink_to_fit();
+
+    ASSERT_EQ(set.extent(), 0);
 }
 
-TEST(SparseSetNoType, Iterator) {
-    using iterator_type = typename entt::SparseSet<std::uint64_t>::iterator_type;
+TEST(SparseSet, BatchAdd) {
+    entt::sparse_set<entt::entity> set;
+    entt::entity entities[2];
 
-    entt::SparseSet<std::uint64_t> set;
-    set.construct(3);
+    entities[0] = entt::entity{3};
+    entities[1] = entt::entity{42};
+
+    set.construct(entt::entity{12});
+    set.batch(std::begin(entities), std::end(entities));
+    set.construct(entt::entity{24});
+
+    ASSERT_TRUE(set.has(entities[0]));
+    ASSERT_TRUE(set.has(entities[1]));
+    ASSERT_FALSE(set.has(entt::entity{0}));
+    ASSERT_FALSE(set.has(entt::entity{9}));
+    ASSERT_TRUE(set.has(entt::entity{12}));
+    ASSERT_TRUE(set.has(entt::entity{24}));
+
+    ASSERT_FALSE(set.empty());
+    ASSERT_EQ(set.size(), 4u);
+    ASSERT_EQ(set.index(entt::entity{12}), 0u);
+    ASSERT_EQ(set.index(entities[0]), 1u);
+    ASSERT_EQ(set.index(entities[1]), 2u);
+    ASSERT_EQ(set.index(entt::entity{24}), 3u);
+    ASSERT_EQ(set.data()[set.index(entt::entity{12})], entt::entity{12});
+    ASSERT_EQ(set.data()[set.index(entities[0])], entities[0]);
+    ASSERT_EQ(set.data()[set.index(entities[1])], entities[1]);
+    ASSERT_EQ(set.data()[set.index(entt::entity{24})], entt::entity{24});
+}
+
+TEST(SparseSet, Iterator) {
+    using iterator_type = typename entt::sparse_set<entt::entity>::iterator_type;
+
+    entt::sparse_set<entt::entity> set;
+    set.construct(entt::entity{3});
 
     iterator_type end{set.begin()};
     iterator_type begin{};
@@ -110,792 +187,540 @@ TEST(SparseSetNoType, Iterator) {
     ASSERT_GT(end, begin);
     ASSERT_GE(end, set.end());
 
-    ASSERT_EQ(*begin, 3);
-    ASSERT_EQ(*begin.operator->(), 3);
+    ASSERT_EQ(*begin, entt::entity{3});
+    ASSERT_EQ(*begin.operator->(), entt::entity{3});
 }
 
-TEST(SparseSetNoType, ConstIterator) {
-    using iterator_type = typename entt::SparseSet<std::uint64_t>::const_iterator_type;
+TEST(SparseSet, Find) {
+    entt::sparse_set<entt::entity> set;
+    set.construct(entt::entity{3});
+    set.construct(entt::entity{42});
+    set.construct(entt::entity{99});
 
-    entt::SparseSet<std::uint64_t> set;
-    set.construct(3);
+    ASSERT_NE(set.find(entt::entity{3}), set.end());
+    ASSERT_NE(set.find(entt::entity{42}), set.end());
+    ASSERT_NE(set.find(entt::entity{99}), set.end());
+    ASSERT_EQ(set.find(entt::entity{0}), set.end());
 
-    iterator_type cend{set.cbegin()};
-    iterator_type cbegin{};
-    cbegin = set.cend();
-    std::swap(cbegin, cend);
+    auto it = set.find(entt::entity{99});
 
-    ASSERT_EQ(cbegin, set.cbegin());
-    ASSERT_EQ(cend, set.cend());
-    ASSERT_NE(cbegin, cend);
-
-    ASSERT_EQ(cbegin++, set.cbegin());
-    ASSERT_EQ(cbegin--, set.cend());
-
-    ASSERT_EQ(cbegin+1, set.cend());
-    ASSERT_EQ(cend-1, set.cbegin());
-
-    ASSERT_EQ(++cbegin, set.cend());
-    ASSERT_EQ(--cbegin, set.cbegin());
-
-    ASSERT_EQ(cbegin += 1, set.cend());
-    ASSERT_EQ(cbegin -= 1, set.cbegin());
-
-    ASSERT_EQ(cbegin + (cend - cbegin), set.cend());
-    ASSERT_EQ(cbegin - (cbegin - cend), set.cend());
-
-    ASSERT_EQ(cend - (cend - cbegin), set.cbegin());
-    ASSERT_EQ(cend + (cbegin - cend), set.cbegin());
-
-    ASSERT_EQ(cbegin[0], *set.cbegin());
-
-    ASSERT_LT(cbegin, cend);
-    ASSERT_LE(cbegin, set.cbegin());
-
-    ASSERT_GT(cend, cbegin);
-    ASSERT_GE(cend, set.cend());
-
-    ASSERT_EQ(*cbegin, 3);
-    ASSERT_EQ(*cbegin.operator->(), 3);
+    ASSERT_EQ(*it, entt::entity{99});
+    ASSERT_EQ(*(++it), entt::entity{42});
+    ASSERT_EQ(*(++it), entt::entity{3});
+    ASSERT_EQ(++it, set.end());
+    ASSERT_EQ(++set.find(entt::entity{3}), set.end());
 }
 
-TEST(SparseSetNoType, Data) {
-    entt::SparseSet<std::uint64_t> set;
+TEST(SparseSet, Data) {
+    entt::sparse_set<entt::entity> set;
 
-    set.construct(3);
-    set.construct(12);
-    set.construct(42);
+    set.construct(entt::entity{3});
+    set.construct(entt::entity{12});
+    set.construct(entt::entity{42});
 
-    ASSERT_EQ(set.get(3), 0u);
-    ASSERT_EQ(set.get(12), 1u);
-    ASSERT_EQ(set.get(42), 2u);
+    ASSERT_EQ(set.index(entt::entity{3}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{42}), 2u);
 
-    ASSERT_EQ(*(set.data() + 0u), 3u);
-    ASSERT_EQ(*(set.data() + 1u), 12u);
-    ASSERT_EQ(*(set.data() + 2u), 42u);
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{42});
 }
 
-TEST(SparseSetNoType, RespectDisjoint) {
-    entt::SparseSet<std::uint64_t> lhs;
-    entt::SparseSet<std::uint64_t> rhs;
-    const auto &clhs = lhs;
+TEST(SparseSet, SortOrdered) {
+    entt::sparse_set<entt::entity> set;
 
-    lhs.construct(3);
-    lhs.construct(12);
-    lhs.construct(42);
+    set.construct(entt::entity{42});
+    set.construct(entt::entity{12});
+    set.construct(entt::entity{9});
+    set.construct(entt::entity{7});
+    set.construct(entt::entity{3});
 
-    ASSERT_EQ(lhs.get(3), 0u);
-    ASSERT_EQ(lhs.get(12), 1u);
-    ASSERT_EQ(lhs.get(42), 2u);
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{42});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{3});
+
+    set.sort(set.begin(), set.end(), std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{9}), 2u);
+    ASSERT_EQ(set.index(entt::entity{7}), 3u);
+    ASSERT_EQ(set.index(entt::entity{3}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{42});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{3});
+
+    auto begin = set.begin();
+    auto end = set.end();
+
+    ASSERT_EQ(*(begin++), entt::entity{3});
+    ASSERT_EQ(*(begin++), entt::entity{7});
+    ASSERT_EQ(*(begin++), entt::entity{9});
+    ASSERT_EQ(*(begin++), entt::entity{12});
+    ASSERT_EQ(*(begin++), entt::entity{42});
+    ASSERT_EQ(begin, end);
+}
+
+TEST(SparseSet, SortReverse) {
+    entt::sparse_set<entt::entity> set;
+
+    set.construct(entt::entity{3});
+    set.construct(entt::entity{7});
+    set.construct(entt::entity{9});
+    set.construct(entt::entity{12});
+    set.construct(entt::entity{42});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.sort(set.begin(), set.end(), std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{9}), 2u);
+    ASSERT_EQ(set.index(entt::entity{7}), 3u);
+    ASSERT_EQ(set.index(entt::entity{3}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{42});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{3});
+
+    auto begin = set.begin();
+    auto end = set.end();
+
+    ASSERT_EQ(*(begin++), entt::entity{3});
+    ASSERT_EQ(*(begin++), entt::entity{7});
+    ASSERT_EQ(*(begin++), entt::entity{9});
+    ASSERT_EQ(*(begin++), entt::entity{12});
+    ASSERT_EQ(*(begin++), entt::entity{42});
+    ASSERT_EQ(begin, end);
+}
+
+TEST(SparseSet, SortUnordered) {
+    entt::sparse_set<entt::entity> set;
+
+    set.construct(entt::entity{9});
+    set.construct(entt::entity{7});
+    set.construct(entt::entity{3});
+    set.construct(entt::entity{12});
+    set.construct(entt::entity{42});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.sort(set.begin(), set.end(), std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{9}), 2u);
+    ASSERT_EQ(set.index(entt::entity{7}), 3u);
+    ASSERT_EQ(set.index(entt::entity{3}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{42});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{3});
+
+    auto begin = set.begin();
+    auto end = set.end();
+
+    ASSERT_EQ(*(begin++), entt::entity{3});
+    ASSERT_EQ(*(begin++), entt::entity{7});
+    ASSERT_EQ(*(begin++), entt::entity{9});
+    ASSERT_EQ(*(begin++), entt::entity{12});
+    ASSERT_EQ(*(begin++), entt::entity{42});
+    ASSERT_EQ(begin, end);
+}
+
+TEST(SparseSet, SortRange) {
+    entt::sparse_set<entt::entity> set;
+
+    set.construct(entt::entity{9});
+    set.construct(entt::entity{7});
+    set.construct(entt::entity{3});
+    set.construct(entt::entity{12});
+    set.construct(entt::entity{42});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.sort(set.end(), set.end(), std::less{});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.sort(set.begin(), set.begin(), std::less{});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.sort(set.begin()+2, set.begin()+3, std::less{});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.sort(++set.begin(), --set.end(), std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{9}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{7}), 2u);
+    ASSERT_EQ(set.index(entt::entity{3}), 3u);
+    ASSERT_EQ(set.index(entt::entity{42}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    auto begin = set.begin();
+    auto end = set.end();
+
+    ASSERT_EQ(*(begin++), entt::entity{42});
+    ASSERT_EQ(*(begin++), entt::entity{3});
+    ASSERT_EQ(*(begin++), entt::entity{7});
+    ASSERT_EQ(*(begin++), entt::entity{12});
+    ASSERT_EQ(*(begin++), entt::entity{9});
+    ASSERT_EQ(begin, end);
+}
+
+TEST(SparseSet, ArrangOrdered) {
+    entt::sparse_set<entt::entity> set;
+    entt::entity entities[5]{entt::entity{42}, entt::entity{12}, entt::entity{9}, entt::entity{7}, entt::entity{3}};
+    set.batch(std::begin(entities), std::end(entities));
+
+    set.arrange(set.begin(), set.end(), [](auto...) { FAIL(); }, std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{9}), 2u);
+    ASSERT_EQ(set.index(entt::entity{7}), 3u);
+    ASSERT_EQ(set.index(entt::entity{3}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{42});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{3});
+
+    ASSERT_TRUE(std::equal(std::begin(entities), std::end(entities), set.data()));
+}
+
+TEST(SparseSet, ArrangeReverse) {
+    entt::sparse_set<entt::entity> set;
+    entt::entity entities[5]{entt::entity{3}, entt::entity{7}, entt::entity{9}, entt::entity{12}, entt::entity{42}};
+    set.batch(std::begin(entities), std::end(entities));
+
+    set.arrange(set.begin(), set.end(), [&set, &entities](const auto lhs, const auto rhs) {
+        std::swap(entities[set.index(lhs)], entities[set.index(rhs)]);
+    }, std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{9}), 2u);
+    ASSERT_EQ(set.index(entt::entity{7}), 3u);
+    ASSERT_EQ(set.index(entt::entity{3}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{42});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{3});
+
+    ASSERT_TRUE(std::equal(std::begin(entities), std::end(entities), set.data()));
+}
+
+TEST(SparseSet, ArrangeUnordered) {
+    entt::sparse_set<entt::entity> set;
+    entt::entity entities[5]{entt::entity{9}, entt::entity{7}, entt::entity{3}, entt::entity{12}, entt::entity{42}};
+    set.batch(std::begin(entities), std::end(entities));
+
+    set.arrange(set.begin(), set.end(), [&set, &entities](const auto lhs, const auto rhs) {
+        std::swap(entities[set.index(lhs)], entities[set.index(rhs)]);
+    }, std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{42}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{9}), 2u);
+    ASSERT_EQ(set.index(entt::entity{7}), 3u);
+    ASSERT_EQ(set.index(entt::entity{3}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{42});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{3});
+
+    ASSERT_TRUE(std::equal(std::begin(entities), std::end(entities), set.data()));
+}
+
+TEST(SparseSet, ArrangeRange) {
+    entt::sparse_set<entt::entity> set;
+    entt::entity entities[5]{entt::entity{9}, entt::entity{7}, entt::entity{3}, entt::entity{12}, entt::entity{42}};
+    set.batch(std::begin(entities), std::end(entities));
+
+    set.arrange(set.end(), set.end(), [](const auto, const auto) { FAIL(); }, std::less{});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.arrange(set.begin(), set.begin(), [](const auto, const auto) { FAIL(); }, std::less{});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.arrange(set.begin()+2, set.begin()+3, [](const auto, const auto) { FAIL(); }, std::less{});
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+
+    set.arrange(++set.begin(), --set.end(), [&set, &entities](const auto lhs, const auto rhs) {
+        std::swap(entities[set.index(lhs)], entities[set.index(rhs)]);
+    }, std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{9}), 0u);
+    ASSERT_EQ(set.index(entt::entity{12}), 1u);
+    ASSERT_EQ(set.index(entt::entity{7}), 2u);
+    ASSERT_EQ(set.index(entt::entity{3}), 3u);
+    ASSERT_EQ(set.index(entt::entity{42}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{9});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{12});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{7});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{42});
+}
+
+TEST(SparseSet, ArrangeCornerCase) {
+    entt::sparse_set<entt::entity> set;
+    entt::entity entities[5]{entt::entity{0}, entt::entity{1}, entt::entity{4}, entt::entity{3}, entt::entity{2}};
+    set.batch(std::begin(entities), std::end(entities));
+
+    set.arrange(++set.begin(), set.end(), [&set, &entities](const auto lhs, const auto rhs) {
+        std::swap(entities[set.index(lhs)], entities[set.index(rhs)]);
+    }, std::less{});
+
+    ASSERT_EQ(set.index(entt::entity{4}), 0u);
+    ASSERT_EQ(set.index(entt::entity{3}), 1u);
+    ASSERT_EQ(set.index(entt::entity{1}), 2u);
+    ASSERT_EQ(set.index(entt::entity{0}), 3u);
+    ASSERT_EQ(set.index(entt::entity{2}), 4u);
+
+    ASSERT_EQ(*(set.data() + 0u), entt::entity{4});
+    ASSERT_EQ(*(set.data() + 1u), entt::entity{3});
+    ASSERT_EQ(*(set.data() + 2u), entt::entity{1});
+    ASSERT_EQ(*(set.data() + 3u), entt::entity{0});
+    ASSERT_EQ(*(set.data() + 4u), entt::entity{2});
+}
+
+TEST(SparseSet, RespectDisjoint) {
+    entt::sparse_set<entt::entity> lhs;
+    entt::sparse_set<entt::entity> rhs;
+
+    lhs.construct(entt::entity{3});
+    lhs.construct(entt::entity{12});
+    lhs.construct(entt::entity{42});
+
+    ASSERT_EQ(lhs.index(entt::entity{3}), 0u);
+    ASSERT_EQ(lhs.index(entt::entity{12}), 1u);
+    ASSERT_EQ(lhs.index(entt::entity{42}), 2u);
 
     lhs.respect(rhs);
 
-    ASSERT_EQ(clhs.get(3), 0u);
-    ASSERT_EQ(clhs.get(12), 1u);
-    ASSERT_EQ(clhs.get(42), 2u);
+    ASSERT_EQ(std::as_const(lhs).index(entt::entity{3}), 0u);
+    ASSERT_EQ(std::as_const(lhs).index(entt::entity{12}), 1u);
+    ASSERT_EQ(std::as_const(lhs).index(entt::entity{42}), 2u);
 }
 
-TEST(SparseSetNoType, RespectOverlap) {
-    entt::SparseSet<std::uint64_t> lhs;
-    entt::SparseSet<std::uint64_t> rhs;
-    const auto &clhs = lhs;
+TEST(SparseSet, RespectOverlap) {
+    entt::sparse_set<entt::entity> lhs;
+    entt::sparse_set<entt::entity> rhs;
 
-    lhs.construct(3);
-    lhs.construct(12);
-    lhs.construct(42);
+    lhs.construct(entt::entity{3});
+    lhs.construct(entt::entity{12});
+    lhs.construct(entt::entity{42});
 
-    rhs.construct(12);
+    rhs.construct(entt::entity{12});
 
-    ASSERT_EQ(lhs.get(3), 0u);
-    ASSERT_EQ(lhs.get(12), 1u);
-    ASSERT_EQ(lhs.get(42), 2u);
+    ASSERT_EQ(lhs.index(entt::entity{3}), 0u);
+    ASSERT_EQ(lhs.index(entt::entity{12}), 1u);
+    ASSERT_EQ(lhs.index(entt::entity{42}), 2u);
 
     lhs.respect(rhs);
 
-    ASSERT_EQ(clhs.get(3), 0u);
-    ASSERT_EQ(clhs.get(12), 2u);
-    ASSERT_EQ(clhs.get(42), 1u);
+    ASSERT_EQ(std::as_const(lhs).index(entt::entity{3}), 0u);
+    ASSERT_EQ(std::as_const(lhs).index(entt::entity{12}), 2u);
+    ASSERT_EQ(std::as_const(lhs).index(entt::entity{42}), 1u);
 }
 
-TEST(SparseSetNoType, RespectOrdered) {
-    entt::SparseSet<std::uint64_t> lhs;
-    entt::SparseSet<std::uint64_t> rhs;
+TEST(SparseSet, RespectOrdered) {
+    entt::sparse_set<entt::entity> lhs;
+    entt::sparse_set<entt::entity> rhs;
 
-    lhs.construct(1);
-    lhs.construct(2);
-    lhs.construct(3);
-    lhs.construct(4);
-    lhs.construct(5);
+    lhs.construct(entt::entity{1});
+    lhs.construct(entt::entity{2});
+    lhs.construct(entt::entity{3});
+    lhs.construct(entt::entity{4});
+    lhs.construct(entt::entity{5});
 
-    ASSERT_EQ(lhs.get(1), 0u);
-    ASSERT_EQ(lhs.get(2), 1u);
-    ASSERT_EQ(lhs.get(3), 2u);
-    ASSERT_EQ(lhs.get(4), 3u);
-    ASSERT_EQ(lhs.get(5), 4u);
+    ASSERT_EQ(lhs.index(entt::entity{1}), 0u);
+    ASSERT_EQ(lhs.index(entt::entity{2}), 1u);
+    ASSERT_EQ(lhs.index(entt::entity{3}), 2u);
+    ASSERT_EQ(lhs.index(entt::entity{4}), 3u);
+    ASSERT_EQ(lhs.index(entt::entity{5}), 4u);
 
-    rhs.construct(6);
-    rhs.construct(1);
-    rhs.construct(2);
-    rhs.construct(3);
-    rhs.construct(4);
-    rhs.construct(5);
+    rhs.construct(entt::entity{6});
+    rhs.construct(entt::entity{1});
+    rhs.construct(entt::entity{2});
+    rhs.construct(entt::entity{3});
+    rhs.construct(entt::entity{4});
+    rhs.construct(entt::entity{5});
 
-    ASSERT_EQ(rhs.get(6), 0u);
-    ASSERT_EQ(rhs.get(1), 1u);
-    ASSERT_EQ(rhs.get(2), 2u);
-    ASSERT_EQ(rhs.get(3), 3u);
-    ASSERT_EQ(rhs.get(4), 4u);
-    ASSERT_EQ(rhs.get(5), 5u);
+    ASSERT_EQ(rhs.index(entt::entity{6}), 0u);
+    ASSERT_EQ(rhs.index(entt::entity{1}), 1u);
+    ASSERT_EQ(rhs.index(entt::entity{2}), 2u);
+    ASSERT_EQ(rhs.index(entt::entity{3}), 3u);
+    ASSERT_EQ(rhs.index(entt::entity{4}), 4u);
+    ASSERT_EQ(rhs.index(entt::entity{5}), 5u);
 
     rhs.respect(lhs);
 
-    ASSERT_EQ(rhs.get(6), 0u);
-    ASSERT_EQ(rhs.get(1), 1u);
-    ASSERT_EQ(rhs.get(2), 2u);
-    ASSERT_EQ(rhs.get(3), 3u);
-    ASSERT_EQ(rhs.get(4), 4u);
-    ASSERT_EQ(rhs.get(5), 5u);
+    ASSERT_EQ(rhs.index(entt::entity{6}), 0u);
+    ASSERT_EQ(rhs.index(entt::entity{1}), 1u);
+    ASSERT_EQ(rhs.index(entt::entity{2}), 2u);
+    ASSERT_EQ(rhs.index(entt::entity{3}), 3u);
+    ASSERT_EQ(rhs.index(entt::entity{4}), 4u);
+    ASSERT_EQ(rhs.index(entt::entity{5}), 5u);
 }
 
-TEST(SparseSetNoType, RespectReverse) {
-    entt::SparseSet<std::uint64_t> lhs;
-    entt::SparseSet<std::uint64_t> rhs;
+TEST(SparseSet, RespectReverse) {
+    entt::sparse_set<entt::entity> lhs;
+    entt::sparse_set<entt::entity> rhs;
 
-    lhs.construct(1);
-    lhs.construct(2);
-    lhs.construct(3);
-    lhs.construct(4);
-    lhs.construct(5);
+    lhs.construct(entt::entity{1});
+    lhs.construct(entt::entity{2});
+    lhs.construct(entt::entity{3});
+    lhs.construct(entt::entity{4});
+    lhs.construct(entt::entity{5});
 
-    ASSERT_EQ(lhs.get(1), 0u);
-    ASSERT_EQ(lhs.get(2), 1u);
-    ASSERT_EQ(lhs.get(3), 2u);
-    ASSERT_EQ(lhs.get(4), 3u);
-    ASSERT_EQ(lhs.get(5), 4u);
+    ASSERT_EQ(lhs.index(entt::entity{1}), 0u);
+    ASSERT_EQ(lhs.index(entt::entity{2}), 1u);
+    ASSERT_EQ(lhs.index(entt::entity{3}), 2u);
+    ASSERT_EQ(lhs.index(entt::entity{4}), 3u);
+    ASSERT_EQ(lhs.index(entt::entity{5}), 4u);
 
-    rhs.construct(5);
-    rhs.construct(4);
-    rhs.construct(3);
-    rhs.construct(2);
-    rhs.construct(1);
-    rhs.construct(6);
+    rhs.construct(entt::entity{5});
+    rhs.construct(entt::entity{4});
+    rhs.construct(entt::entity{3});
+    rhs.construct(entt::entity{2});
+    rhs.construct(entt::entity{1});
+    rhs.construct(entt::entity{6});
 
-    ASSERT_EQ(rhs.get(5), 0u);
-    ASSERT_EQ(rhs.get(4), 1u);
-    ASSERT_EQ(rhs.get(3), 2u);
-    ASSERT_EQ(rhs.get(2), 3u);
-    ASSERT_EQ(rhs.get(1), 4u);
-    ASSERT_EQ(rhs.get(6), 5u);
+    ASSERT_EQ(rhs.index(entt::entity{5}), 0u);
+    ASSERT_EQ(rhs.index(entt::entity{4}), 1u);
+    ASSERT_EQ(rhs.index(entt::entity{3}), 2u);
+    ASSERT_EQ(rhs.index(entt::entity{2}), 3u);
+    ASSERT_EQ(rhs.index(entt::entity{1}), 4u);
+    ASSERT_EQ(rhs.index(entt::entity{6}), 5u);
 
     rhs.respect(lhs);
 
-    ASSERT_EQ(rhs.get(6), 0u);
-    ASSERT_EQ(rhs.get(1), 1u);
-    ASSERT_EQ(rhs.get(2), 2u);
-    ASSERT_EQ(rhs.get(3), 3u);
-    ASSERT_EQ(rhs.get(4), 4u);
-    ASSERT_EQ(rhs.get(5), 5u);
+    ASSERT_EQ(rhs.index(entt::entity{6}), 0u);
+    ASSERT_EQ(rhs.index(entt::entity{1}), 1u);
+    ASSERT_EQ(rhs.index(entt::entity{2}), 2u);
+    ASSERT_EQ(rhs.index(entt::entity{3}), 3u);
+    ASSERT_EQ(rhs.index(entt::entity{4}), 4u);
+    ASSERT_EQ(rhs.index(entt::entity{5}), 5u);
 }
 
-TEST(SparseSetNoType, RespectUnordered) {
-    entt::SparseSet<std::uint64_t> lhs;
-    entt::SparseSet<std::uint64_t> rhs;
+TEST(SparseSet, RespectUnordered) {
+    entt::sparse_set<entt::entity> lhs;
+    entt::sparse_set<entt::entity> rhs;
 
-    lhs.construct(1);
-    lhs.construct(2);
-    lhs.construct(3);
-    lhs.construct(4);
-    lhs.construct(5);
+    lhs.construct(entt::entity{1});
+    lhs.construct(entt::entity{2});
+    lhs.construct(entt::entity{3});
+    lhs.construct(entt::entity{4});
+    lhs.construct(entt::entity{5});
 
-    ASSERT_EQ(lhs.get(1), 0u);
-    ASSERT_EQ(lhs.get(2), 1u);
-    ASSERT_EQ(lhs.get(3), 2u);
-    ASSERT_EQ(lhs.get(4), 3u);
-    ASSERT_EQ(lhs.get(5), 4u);
+    ASSERT_EQ(lhs.index(entt::entity{1}), 0u);
+    ASSERT_EQ(lhs.index(entt::entity{2}), 1u);
+    ASSERT_EQ(lhs.index(entt::entity{3}), 2u);
+    ASSERT_EQ(lhs.index(entt::entity{4}), 3u);
+    ASSERT_EQ(lhs.index(entt::entity{5}), 4u);
 
-    rhs.construct(3);
-    rhs.construct(2);
-    rhs.construct(6);
-    rhs.construct(1);
-    rhs.construct(4);
-    rhs.construct(5);
+    rhs.construct(entt::entity{3});
+    rhs.construct(entt::entity{2});
+    rhs.construct(entt::entity{6});
+    rhs.construct(entt::entity{1});
+    rhs.construct(entt::entity{4});
+    rhs.construct(entt::entity{5});
 
-    ASSERT_EQ(rhs.get(3), 0u);
-    ASSERT_EQ(rhs.get(2), 1u);
-    ASSERT_EQ(rhs.get(6), 2u);
-    ASSERT_EQ(rhs.get(1), 3u);
-    ASSERT_EQ(rhs.get(4), 4u);
-    ASSERT_EQ(rhs.get(5), 5u);
+    ASSERT_EQ(rhs.index(entt::entity{3}), 0u);
+    ASSERT_EQ(rhs.index(entt::entity{2}), 1u);
+    ASSERT_EQ(rhs.index(entt::entity{6}), 2u);
+    ASSERT_EQ(rhs.index(entt::entity{1}), 3u);
+    ASSERT_EQ(rhs.index(entt::entity{4}), 4u);
+    ASSERT_EQ(rhs.index(entt::entity{5}), 5u);
 
     rhs.respect(lhs);
 
-    ASSERT_EQ(rhs.get(6), 0u);
-    ASSERT_EQ(rhs.get(1), 1u);
-    ASSERT_EQ(rhs.get(2), 2u);
-    ASSERT_EQ(rhs.get(3), 3u);
-    ASSERT_EQ(rhs.get(4), 4u);
-    ASSERT_EQ(rhs.get(5), 5u);
+    ASSERT_EQ(rhs.index(entt::entity{6}), 0u);
+    ASSERT_EQ(rhs.index(entt::entity{1}), 1u);
+    ASSERT_EQ(rhs.index(entt::entity{2}), 2u);
+    ASSERT_EQ(rhs.index(entt::entity{3}), 3u);
+    ASSERT_EQ(rhs.index(entt::entity{4}), 4u);
+    ASSERT_EQ(rhs.index(entt::entity{5}), 5u);
 }
 
-TEST(SparseSetNoType, CanModifyDuringIteration) {
-    entt::SparseSet<std::uint64_t> set;
-    set.construct(0);
+TEST(SparseSet, CanModifyDuringIteration) {
+    entt::sparse_set<entt::entity> set;
+    set.construct(entt::entity{0});
 
-    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{1});
+    ASSERT_EQ(set.capacity(), entt::sparse_set<entt::entity>::size_type{1});
 
-    const auto it = set.cbegin();
-    set.reserve(entt::SparseSet<std::uint64_t>::size_type{2});
+    const auto it = set.begin();
+    set.reserve(entt::sparse_set<entt::entity>::size_type{2});
 
-    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{2});
+    ASSERT_EQ(set.capacity(), entt::sparse_set<entt::entity>::size_type{2});
 
     // this should crash with asan enabled if we break the constraint
     const auto entity = *it;
     (void)entity;
-}
-
-TEST(SparseSetWithType, Functionalities) {
-    entt::SparseSet<std::uint64_t, int> set;
-    const auto &cset = set;
-
-    set.reserve(42);
-
-    ASSERT_EQ(set.capacity(), 42);
-    ASSERT_TRUE(set.empty());
-    ASSERT_EQ(set.size(), 0u);
-    ASSERT_EQ(cset.begin(), cset.end());
-    ASSERT_EQ(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_FALSE(set.has(42));
-
-    set.construct(42, 3);
-
-    ASSERT_FALSE(set.empty());
-    ASSERT_EQ(set.size(), 1u);
-    ASSERT_NE(cset.begin(), cset.end());
-    ASSERT_NE(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_TRUE(set.has(42));
-    ASSERT_TRUE(set.fast(42));
-    ASSERT_EQ(set.get(42), 3);
-
-    set.destroy(42);
-
-    ASSERT_TRUE(set.empty());
-    ASSERT_EQ(set.size(), 0u);
-    ASSERT_EQ(cset.begin(), cset.end());
-    ASSERT_EQ(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_FALSE(set.has(42));
-
-    set.construct(42, 12);
-
-    ASSERT_EQ(set.get(42), 12);
-
-    set.reset();
-
-    ASSERT_TRUE(set.empty());
-    ASSERT_EQ(set.size(), 0u);
-    ASSERT_EQ(cset.begin(), cset.end());
-    ASSERT_EQ(set.begin(), set.end());
-    ASSERT_FALSE(set.has(0));
-    ASSERT_FALSE(set.has(42));
-
-    (void)entt::SparseSet<std::uint64_t, int>{std::move(set)};
-    entt::SparseSet<std::uint64_t, int> other;
-    other = std::move(set);
-}
-
-TEST(SparseSetWithType, ElementAccess) {
-    entt::SparseSet<std::uint64_t, int> set;
-    const auto &cset = set;
-
-    set.construct(42, 1);
-    set.construct(3, 0);
-
-    for(typename entt::SparseSet<std::uint64_t, int>::size_type i{}; i < set.size(); ++i) {
-        ASSERT_EQ(set[i], i);
-        ASSERT_EQ(cset[i], i);
-    }
-}
-
-TEST(SparseSetWithType, AggregatesMustWork) {
-    struct AggregateType { int value; };
-    // the goal of this test is to enforce the requirements for aggregate types
-    entt::SparseSet<std::uint64_t, AggregateType>{}.construct(0, 42);
-}
-
-TEST(SparseSetWithType, TypesFromStandardTemplateLibraryMustWork) {
-    // see #37 - this test shouldn't crash, that's all
-    entt::SparseSet<std::uint64_t, std::unordered_set<int>> set;
-    set.construct(0).insert(42);
-    set.destroy(0);
-}
-
-TEST(SparseSetWithType, Iterator) {
-    struct InternalType { int value; };
-
-    using iterator_type = typename entt::SparseSet<std::uint64_t, InternalType>::iterator_type;
-
-    entt::SparseSet<std::uint64_t, InternalType> set;
-    set.construct(3, 42);
-
-    iterator_type end{set.begin()};
-    iterator_type begin{};
-    begin = set.end();
-    std::swap(begin, end);
-
-    ASSERT_EQ(begin, set.begin());
-    ASSERT_EQ(end, set.end());
-    ASSERT_NE(begin, end);
-
-    ASSERT_EQ(begin++, set.begin());
-    ASSERT_EQ(begin--, set.end());
-
-    ASSERT_EQ(begin+1, set.end());
-    ASSERT_EQ(end-1, set.begin());
-
-    ASSERT_EQ(++begin, set.end());
-    ASSERT_EQ(--begin, set.begin());
-
-    ASSERT_EQ(begin += 1, set.end());
-    ASSERT_EQ(begin -= 1, set.begin());
-
-    ASSERT_EQ(begin + (end - begin), set.end());
-    ASSERT_EQ(begin - (begin - end), set.end());
-
-    ASSERT_EQ(end - (end - begin), set.begin());
-    ASSERT_EQ(end + (begin - end), set.begin());
-
-    ASSERT_EQ(begin[0].value, set.begin()->value);
-
-    ASSERT_LT(begin, end);
-    ASSERT_LE(begin, set.begin());
-
-    ASSERT_GT(end, begin);
-    ASSERT_GE(end, set.end());
-}
-
-TEST(SparseSetWithType, ConstIterator) {
-    struct InternalType { int value; };
-
-    using iterator_type = typename entt::SparseSet<std::uint64_t, InternalType>::const_iterator_type;
-
-    entt::SparseSet<std::uint64_t, InternalType> set;
-    set.construct(3, 42);
-
-    iterator_type cend{set.cbegin()};
-    iterator_type cbegin{};
-    cbegin = set.cend();
-    std::swap(cbegin, cend);
-
-    ASSERT_EQ(cbegin, set.cbegin());
-    ASSERT_EQ(cend, set.cend());
-    ASSERT_NE(cbegin, cend);
-
-    ASSERT_EQ(cbegin++, set.cbegin());
-    ASSERT_EQ(cbegin--, set.cend());
-
-    ASSERT_EQ(cbegin+1, set.cend());
-    ASSERT_EQ(cend-1, set.cbegin());
-
-    ASSERT_EQ(++cbegin, set.cend());
-    ASSERT_EQ(--cbegin, set.cbegin());
-
-    ASSERT_EQ(cbegin += 1, set.cend());
-    ASSERT_EQ(cbegin -= 1, set.cbegin());
-
-    ASSERT_EQ(cbegin + (cend - cbegin), set.cend());
-    ASSERT_EQ(cbegin - (cbegin - cend), set.cend());
-
-    ASSERT_EQ(cend - (cend - cbegin), set.cbegin());
-    ASSERT_EQ(cend + (cbegin - cend), set.cbegin());
-
-    ASSERT_EQ(cbegin[0].value, set.cbegin()->value);
-
-    ASSERT_LT(cbegin, cend);
-    ASSERT_LE(cbegin, set.cbegin());
-
-    ASSERT_GT(cend, cbegin);
-    ASSERT_GE(cend, set.cend());
-}
-
-TEST(SparseSetWithType, Raw) {
-    entt::SparseSet<std::uint64_t, int> set;
-
-    set.construct(3, 3);
-    set.construct(12, 6);
-    set.construct(42, 9);
-
-    ASSERT_EQ(set.get(3), 3);
-    ASSERT_EQ(set.get(12), 6);
-    ASSERT_EQ(set.get(42), 9);
-
-    ASSERT_EQ(*(set.raw() + 0u), 3);
-    ASSERT_EQ(*(set.raw() + 1u), 6);
-    ASSERT_EQ(*(set.raw() + 2u), 9);
-}
-
-TEST(SparseSetWithType, SortOrdered) {
-    entt::SparseSet<std::uint64_t, int> set;
-
-    set.construct(12, 12);
-    set.construct(42, 9);
-    set.construct(7, 6);
-    set.construct(3, 3);
-    set.construct(9, 1);
-
-    ASSERT_EQ(set.get(12), 12);
-    ASSERT_EQ(set.get(42), 9);
-    ASSERT_EQ(set.get(7), 6);
-    ASSERT_EQ(set.get(3), 3);
-    ASSERT_EQ(set.get(9), 1);
-
-    set.sort([](auto lhs, auto rhs) {
-        return lhs < rhs;
-    });
-
-    ASSERT_EQ(*(set.raw() + 0u), 12);
-    ASSERT_EQ(*(set.raw() + 1u), 9);
-    ASSERT_EQ(*(set.raw() + 2u), 6);
-    ASSERT_EQ(*(set.raw() + 3u), 3);
-    ASSERT_EQ(*(set.raw() + 4u), 1);
-
-    auto begin = set.begin();
-    auto end = set.end();
-
-    ASSERT_EQ(*(begin++), 1);
-    ASSERT_EQ(*(begin++), 3);
-    ASSERT_EQ(*(begin++), 6);
-    ASSERT_EQ(*(begin++), 9);
-    ASSERT_EQ(*(begin++), 12);
-    ASSERT_EQ(begin, end);
-}
-
-TEST(SparseSetWithType, SortReverse) {
-    entt::SparseSet<std::uint64_t, int> set;
-
-    set.construct(12, 1);
-    set.construct(42, 3);
-    set.construct(7, 6);
-    set.construct(3, 9);
-    set.construct(9, 12);
-
-    ASSERT_EQ(set.get(12), 1);
-    ASSERT_EQ(set.get(42), 3);
-    ASSERT_EQ(set.get(7), 6);
-    ASSERT_EQ(set.get(3), 9);
-    ASSERT_EQ(set.get(9), 12);
-
-    set.sort([](auto lhs, auto rhs) {
-        return lhs < rhs;
-    });
-
-    ASSERT_EQ(*(set.raw() + 0u), 12);
-    ASSERT_EQ(*(set.raw() + 1u), 9);
-    ASSERT_EQ(*(set.raw() + 2u), 6);
-    ASSERT_EQ(*(set.raw() + 3u), 3);
-    ASSERT_EQ(*(set.raw() + 4u), 1);
-
-    auto begin = set.begin();
-    auto end = set.end();
-
-    ASSERT_EQ(*(begin++), 1);
-    ASSERT_EQ(*(begin++), 3);
-    ASSERT_EQ(*(begin++), 6);
-    ASSERT_EQ(*(begin++), 9);
-    ASSERT_EQ(*(begin++), 12);
-    ASSERT_EQ(begin, end);
-}
-
-TEST(SparseSetWithType, SortUnordered) {
-    entt::SparseSet<std::uint64_t, int> set;
-
-    set.construct(12, 6);
-    set.construct(42, 3);
-    set.construct(7, 1);
-    set.construct(3, 9);
-    set.construct(9, 12);
-
-    ASSERT_EQ(set.get(12), 6);
-    ASSERT_EQ(set.get(42), 3);
-    ASSERT_EQ(set.get(7), 1);
-    ASSERT_EQ(set.get(3), 9);
-    ASSERT_EQ(set.get(9), 12);
-
-    set.sort([](auto lhs, auto rhs) {
-        return lhs < rhs;
-    });
-
-    ASSERT_EQ(*(set.raw() + 0u), 12);
-    ASSERT_EQ(*(set.raw() + 1u), 9);
-    ASSERT_EQ(*(set.raw() + 2u), 6);
-    ASSERT_EQ(*(set.raw() + 3u), 3);
-    ASSERT_EQ(*(set.raw() + 4u), 1);
-
-    auto begin = set.begin();
-    auto end = set.end();
-
-    ASSERT_EQ(*(begin++), 1);
-    ASSERT_EQ(*(begin++), 3);
-    ASSERT_EQ(*(begin++), 6);
-    ASSERT_EQ(*(begin++), 9);
-    ASSERT_EQ(*(begin++), 12);
-    ASSERT_EQ(begin, end);
-}
-
-TEST(SparseSetWithType, RespectDisjoint) {
-    entt::SparseSet<std::uint64_t, int> lhs;
-    entt::SparseSet<std::uint64_t, int> rhs;
-    const auto &clhs = lhs;
-
-    lhs.construct(3, 3);
-    lhs.construct(12, 6);
-    lhs.construct(42, 9);
-
-    ASSERT_EQ(clhs.get(3), 3);
-    ASSERT_EQ(clhs.get(12), 6);
-    ASSERT_EQ(clhs.get(42), 9);
-
-    lhs.respect(rhs);
-
-    ASSERT_EQ(*(clhs.raw() + 0u), 3);
-    ASSERT_EQ(*(clhs.raw() + 1u), 6);
-    ASSERT_EQ(*(clhs.raw() + 2u), 9);
-
-    auto begin = lhs.begin();
-    auto end = lhs.end();
-
-    ASSERT_EQ(*(begin++), 9);
-    ASSERT_EQ(*(begin++), 6);
-    ASSERT_EQ(*(begin++), 3);
-    ASSERT_EQ(begin, end);
-}
-
-TEST(SparseSetWithType, RespectOverlap) {
-    entt::SparseSet<std::uint64_t, int> lhs;
-    entt::SparseSet<std::uint64_t, int> rhs;
-    const auto &clhs = lhs;
-
-    lhs.construct(3, 3);
-    lhs.construct(12, 6);
-    lhs.construct(42, 9);
-    rhs.construct(12, 6);
-
-    ASSERT_EQ(clhs.get(3), 3);
-    ASSERT_EQ(clhs.get(12), 6);
-    ASSERT_EQ(clhs.get(42), 9);
-    ASSERT_EQ(rhs.get(12), 6);
-
-    lhs.respect(rhs);
-
-    ASSERT_EQ(*(clhs.raw() + 0u), 3);
-    ASSERT_EQ(*(clhs.raw() + 1u), 9);
-    ASSERT_EQ(*(clhs.raw() + 2u), 6);
-
-    auto begin = lhs.begin();
-    auto end = lhs.end();
-
-    ASSERT_EQ(*(begin++), 6);
-    ASSERT_EQ(*(begin++), 9);
-    ASSERT_EQ(*(begin++), 3);
-    ASSERT_EQ(begin, end);
-}
-
-TEST(SparseSetWithType, RespectOrdered) {
-    entt::SparseSet<std::uint64_t, int> lhs;
-    entt::SparseSet<std::uint64_t, int> rhs;
-
-    lhs.construct(1, 0);
-    lhs.construct(2, 0);
-    lhs.construct(3, 0);
-    lhs.construct(4, 0);
-    lhs.construct(5, 0);
-
-    ASSERT_EQ(lhs.get(1), 0);
-    ASSERT_EQ(lhs.get(2), 0);
-    ASSERT_EQ(lhs.get(3), 0);
-    ASSERT_EQ(lhs.get(4), 0);
-    ASSERT_EQ(lhs.get(5), 0);
-
-    rhs.construct(6, 0);
-    rhs.construct(1, 0);
-    rhs.construct(2, 0);
-    rhs.construct(3, 0);
-    rhs.construct(4, 0);
-    rhs.construct(5, 0);
-
-    ASSERT_EQ(rhs.get(6), 0);
-    ASSERT_EQ(rhs.get(1), 0);
-    ASSERT_EQ(rhs.get(2), 0);
-    ASSERT_EQ(rhs.get(3), 0);
-    ASSERT_EQ(rhs.get(4), 0);
-    ASSERT_EQ(rhs.get(5), 0);
-
-    rhs.respect(lhs);
-
-    ASSERT_EQ(*(lhs.data() + 0u), 1u);
-    ASSERT_EQ(*(lhs.data() + 1u), 2u);
-    ASSERT_EQ(*(lhs.data() + 2u), 3u);
-    ASSERT_EQ(*(lhs.data() + 3u), 4u);
-    ASSERT_EQ(*(lhs.data() + 4u), 5u);
-
-    ASSERT_EQ(*(rhs.data() + 0u), 6u);
-    ASSERT_EQ(*(rhs.data() + 1u), 1u);
-    ASSERT_EQ(*(rhs.data() + 2u), 2u);
-    ASSERT_EQ(*(rhs.data() + 3u), 3u);
-    ASSERT_EQ(*(rhs.data() + 4u), 4u);
-    ASSERT_EQ(*(rhs.data() + 5u), 5u);
-}
-
-TEST(SparseSetWithType, RespectReverse) {
-    entt::SparseSet<std::uint64_t, int> lhs;
-    entt::SparseSet<std::uint64_t, int> rhs;
-
-    lhs.construct(1, 0);
-    lhs.construct(2, 0);
-    lhs.construct(3, 0);
-    lhs.construct(4, 0);
-    lhs.construct(5, 0);
-
-    ASSERT_EQ(lhs.get(1), 0);
-    ASSERT_EQ(lhs.get(2), 0);
-    ASSERT_EQ(lhs.get(3), 0);
-    ASSERT_EQ(lhs.get(4), 0);
-    ASSERT_EQ(lhs.get(5), 0);
-
-    rhs.construct(5, 0);
-    rhs.construct(4, 0);
-    rhs.construct(3, 0);
-    rhs.construct(2, 0);
-    rhs.construct(1, 0);
-    rhs.construct(6, 0);
-
-    ASSERT_EQ(rhs.get(5), 0);
-    ASSERT_EQ(rhs.get(4), 0);
-    ASSERT_EQ(rhs.get(3), 0);
-    ASSERT_EQ(rhs.get(2), 0);
-    ASSERT_EQ(rhs.get(1), 0);
-    ASSERT_EQ(rhs.get(6), 0);
-
-    rhs.respect(lhs);
-
-    ASSERT_EQ(*(lhs.data() + 0u), 1u);
-    ASSERT_EQ(*(lhs.data() + 1u), 2u);
-    ASSERT_EQ(*(lhs.data() + 2u), 3u);
-    ASSERT_EQ(*(lhs.data() + 3u), 4u);
-    ASSERT_EQ(*(lhs.data() + 4u), 5u);
-
-    ASSERT_EQ(*(rhs.data() + 0u), 6u);
-    ASSERT_EQ(*(rhs.data() + 1u), 1u);
-    ASSERT_EQ(*(rhs.data() + 2u), 2u);
-    ASSERT_EQ(*(rhs.data() + 3u), 3u);
-    ASSERT_EQ(*(rhs.data() + 4u), 4u);
-    ASSERT_EQ(*(rhs.data() + 5u), 5u);
-}
-
-TEST(SparseSetWithType, RespectUnordered) {
-    entt::SparseSet<std::uint64_t, int> lhs;
-    entt::SparseSet<std::uint64_t, int> rhs;
-
-    lhs.construct(1, 0);
-    lhs.construct(2, 0);
-    lhs.construct(3, 0);
-    lhs.construct(4, 0);
-    lhs.construct(5, 0);
-
-    ASSERT_EQ(lhs.get(1), 0);
-    ASSERT_EQ(lhs.get(2), 0);
-    ASSERT_EQ(lhs.get(3), 0);
-    ASSERT_EQ(lhs.get(4), 0);
-    ASSERT_EQ(lhs.get(5), 0);
-
-    rhs.construct(3, 0);
-    rhs.construct(2, 0);
-    rhs.construct(6, 0);
-    rhs.construct(1, 0);
-    rhs.construct(4, 0);
-    rhs.construct(5, 0);
-
-    ASSERT_EQ(rhs.get(3), 0);
-    ASSERT_EQ(rhs.get(2), 0);
-    ASSERT_EQ(rhs.get(6), 0);
-    ASSERT_EQ(rhs.get(1), 0);
-    ASSERT_EQ(rhs.get(4), 0);
-    ASSERT_EQ(rhs.get(5), 0);
-
-    rhs.respect(lhs);
-
-    ASSERT_EQ(*(lhs.data() + 0u), 1u);
-    ASSERT_EQ(*(lhs.data() + 1u), 2u);
-    ASSERT_EQ(*(lhs.data() + 2u), 3u);
-    ASSERT_EQ(*(lhs.data() + 3u), 4u);
-    ASSERT_EQ(*(lhs.data() + 4u), 5u);
-
-    ASSERT_EQ(*(rhs.data() + 0u), 6u);
-    ASSERT_EQ(*(rhs.data() + 1u), 1u);
-    ASSERT_EQ(*(rhs.data() + 2u), 2u);
-    ASSERT_EQ(*(rhs.data() + 3u), 3u);
-    ASSERT_EQ(*(rhs.data() + 4u), 4u);
-    ASSERT_EQ(*(rhs.data() + 5u), 5u);
-}
-
-TEST(SparseSetWithType, CanModifyDuringIteration) {
-    entt::SparseSet<std::uint64_t, int> set;
-    set.construct(0, 42);
-
-    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{1});
-
-    const auto it = set.cbegin();
-    set.reserve(entt::SparseSet<std::uint64_t>::size_type{2});
-
-    ASSERT_EQ(set.capacity(), entt::SparseSet<std::uint64_t>::size_type{2});
-
-    // this should crash with asan enabled if we break the constraint
-    const auto entity = *it;
-    (void)entity;
-}
-
-TEST(SparseSetWithType, ReferencesGuaranteed) {
-    struct InternalType { int value; };
-
-    entt::SparseSet<std::uint64_t, InternalType> set;
-
-    set.construct(0, 0);
-    set.construct(1, 1);
-
-    ASSERT_EQ(set.get(0).value, 0);
-    ASSERT_EQ(set.get(1).value, 1);
-
-    for(auto &&type: set) {
-        if(type.value) {
-            type.value = 42;
-        }
-    }
-
-    ASSERT_EQ(set.get(0).value, 0);
-    ASSERT_EQ(set.get(1).value, 42);
-
-    auto begin = set.begin();
-
-    while(begin != set.end()) {
-        (begin++)->value = 3;
-    }
-
-    ASSERT_EQ(set.get(0).value, 3);
-    ASSERT_EQ(set.get(1).value, 3);
-}
-
-TEST(SparseSetWithType, MoveOnlyComponent) {
-    struct MoveOnlyComponent {
-        MoveOnlyComponent() = default;
-        ~MoveOnlyComponent() = default;
-        MoveOnlyComponent(const MoveOnlyComponent &) = delete;
-        MoveOnlyComponent(MoveOnlyComponent &&) = default;
-        MoveOnlyComponent & operator=(const MoveOnlyComponent &) = delete;
-        MoveOnlyComponent & operator=(MoveOnlyComponent &&) = default;
-    };
-
-    // it's purpose is to ensure that move only components are always accepted
-    entt::SparseSet<std::uint64_t, MoveOnlyComponent> set;
-    (void)set;
 }

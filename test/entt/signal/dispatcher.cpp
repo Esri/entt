@@ -1,40 +1,85 @@
-#include <memory>
+#include <type_traits>
 #include <gtest/gtest.h>
+#include <entt/core/type_traits.hpp>
 #include <entt/signal/dispatcher.hpp>
 
-struct AnEvent {};
-struct AnotherEvent {};
+struct an_event {};
+struct another_event {};
+struct one_more_event {};
 
-struct Receiver {
-    void receive(const AnEvent &) { ++cnt; }
+ENTT_NAMED_TYPE(an_event);
+
+struct receiver {
+    static void forward(entt::dispatcher &dispatcher, const an_event &event) {
+        dispatcher.enqueue(event);
+    }
+
+    void receive(const an_event &) { ++cnt; }
     void reset() { cnt = 0; }
     int cnt{0};
 };
 
 TEST(Dispatcher, Functionalities) {
-    entt::Dispatcher dispatcher;
-    Receiver receiver;
+    entt::dispatcher dispatcher;
+    receiver receiver;
 
-    dispatcher.template sink<AnEvent>().connect(&receiver);
-    dispatcher.template trigger<AnEvent>();
-    dispatcher.template enqueue<AnEvent>();
-    dispatcher.template enqueue<AnotherEvent>();
-    dispatcher.update<AnotherEvent>();
+    dispatcher.trigger<one_more_event>();
+    dispatcher.enqueue<one_more_event>();
+    dispatcher.update<one_more_event>();
+
+    dispatcher.sink<an_event>().connect<&receiver::receive>(receiver);
+    dispatcher.trigger<an_event>();
+    dispatcher.enqueue<an_event>();
 
     ASSERT_EQ(receiver.cnt, 1);
 
-    dispatcher.update<AnEvent>();
-    dispatcher.template trigger<AnEvent>();
+    dispatcher.enqueue<another_event>();
+    dispatcher.update<another_event>();
+
+    ASSERT_EQ(receiver.cnt, 1);
+
+    dispatcher.update<an_event>();
+    dispatcher.trigger<an_event>();
+
+    ASSERT_EQ(receiver.cnt, 3);
+
+    dispatcher.enqueue<an_event>();
+    dispatcher.discard<an_event>();
+    dispatcher.update();
+
+    dispatcher.enqueue<an_event>();
+    dispatcher.discard();
+    dispatcher.update();
 
     ASSERT_EQ(receiver.cnt, 3);
 
     receiver.reset();
 
-    dispatcher.template sink<AnEvent>().disconnect(&receiver);
-    dispatcher.template trigger<AnEvent>();
-    dispatcher.template enqueue<AnEvent>();
+    an_event event{};
+
+    dispatcher.sink<an_event>().disconnect<&receiver::receive>(receiver);
+    dispatcher.trigger<an_event>();
+    dispatcher.enqueue(event);
     dispatcher.update();
-    dispatcher.template trigger<AnEvent>();
+    dispatcher.trigger(std::as_const(event));
 
     ASSERT_EQ(receiver.cnt, 0);
+}
+
+TEST(Dispatcher, StopAndGo) {
+    entt::dispatcher dispatcher;
+    receiver receiver;
+
+    dispatcher.sink<an_event>().connect<&receiver::forward>(dispatcher);
+    dispatcher.sink<an_event>().connect<&receiver::receive>(receiver);
+
+    dispatcher.enqueue<an_event>();
+    dispatcher.update();
+
+    ASSERT_EQ(receiver.cnt, 1);
+
+    dispatcher.sink<an_event>().disconnect<&receiver::forward>(dispatcher);
+    dispatcher.update();
+
+    ASSERT_EQ(receiver.cnt, 2);
 }

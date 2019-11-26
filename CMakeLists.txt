@@ -16,7 +16,7 @@ endif()
 # Project configuration
 #
 
-project(EnTT VERSION 2.7.3)
+project(EnTT VERSION 3.2.0 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
@@ -31,7 +31,7 @@ set(PROJECT_AUTHOR_EMAIL "michele.caini@gmail.com")
 
 message("*")
 message("* ${PROJECT_NAME} v${PROJECT_VERSION} (${CMAKE_BUILD_TYPE})")
-message("* Copyright (c) 2017-2018 ${PROJECT_AUTHOR} <${PROJECT_AUTHOR_EMAIL}>")
+message("* Copyright (c) 2017-2019 ${PROJECT_AUTHOR} <${PROJECT_AUTHOR_EMAIL}>")
 message("*")
 
 option(USE_LIBCPP "Use libc++ by adding -stdlib=libc++ flag if availbale." ON)
@@ -42,7 +42,7 @@ option(USE_COMPILE_OPTIONS "Use compile options from EnTT." ON)
 # Compiler stuff
 #
 
-if(NOT MSVC AND USE_LIBCPP)
+if(NOT WIN32 AND USE_LIBCPP)
     include(CheckCXXSourceCompiles)
     include(CMakePushCheckState)
 
@@ -52,7 +52,7 @@ if(NOT MSVC AND USE_LIBCPP)
 
     check_cxx_source_compiles("
         #include<type_traits>
-        int main() { return std::is_same<int, int>::value ? 0 : 1; }
+        int main() { return std::is_same_v<int, char>; }
     " HAS_LIBCPP)
 
     if(NOT HAS_LIBCPP)
@@ -67,6 +67,9 @@ endif()
 #
 
 add_library(EnTT INTERFACE)
+add_library(EnTT::EnTT ALIAS EnTT)
+
+configure_file(${EnTT_SOURCE_DIR}/cmake/in/version.h.in ${EnTT_SOURCE_DIR}/src/entt/config/version.h @ONLY)
 
 target_include_directories(
     EnTT INTERFACE
@@ -81,16 +84,16 @@ target_compile_definitions(
 )
 
 if(USE_ASAN)
-    target_compile_options(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-fsanitize=address -fno-omit-frame-pointer>)
-    target_link_libraries(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-fsanitize=address -fno-omit-frame-pointer>)
+    target_compile_options(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<PLATFORM_ID:Windows>>>:-fsanitize=address -fno-omit-frame-pointer>)
+    target_link_libraries(EnTT INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<PLATFORM_ID:Windows>>>:-fsanitize=address -fno-omit-frame-pointer>)
 endif()
 
 if(USE_COMPILE_OPTIONS)
     target_compile_options(
         EnTT
-        INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-O0 -g>
+        INTERFACE $<$<AND:$<CONFIG:Debug>,$<NOT:$<PLATFORM_ID:Windows>>>:-O0 -g>
         # it seems that -O3 ruins a bit the performance when using clang ...
-        INTERFACE $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:Clang>>:-O2>
+        INTERFACE $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:Clang>,$<OR:$<PLATFORM_ID:Darwin>,$<PLATFORM_ID:Linux>>>:-O2>
         # ... on the other side, GCC is incredibly comfortable with it.
         INTERFACE $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:GNU>>:-O3>
     )
@@ -100,7 +103,7 @@ if(HAS_LIBCPP)
     target_compile_options(EnTT BEFORE INTERFACE -stdlib=libc++)
 endif()
 
-target_compile_features(EnTT INTERFACE cxx_std_14)
+target_compile_features(EnTT INTERFACE cxx_std_17)
 
 #
 # Install EnTT
@@ -121,6 +124,7 @@ install(
     EXPORT EnTTTargets
     FILE EnTTTargets.cmake
     DESTINATION ${CUSTOM_INSTALL_CONFIGDIR}
+    NAMESPACE EnTT::
 )
 
 #
@@ -140,7 +144,6 @@ configure_package_config_file(
     ${CUSTOM_INSTALL_CONFIGDIR}/EnTTConfig.cmake
     INSTALL_DESTINATION ${CUSTOM_INSTALL_CONFIGDIR}
     PATH_VARS CMAKE_INSTALL_INCLUDEDIR
-    NO_CHECK_REQUIRED_COMPONENTS_MACRO
 )
 
 write_basic_package_version_file(
@@ -162,7 +165,7 @@ export(PACKAGE EnTT)
 # Tests
 #
 
-option(BUILD_TESTING "Enable testing with ctest." ON)
+option(BUILD_TESTING "Enable testing with ctest." OFF)
 
 if(BUILD_TESTING)
     set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -180,12 +183,19 @@ if(BUILD_TESTING)
         execute_process(COMMAND ${CMAKE_COMMAND} --build . WORKING_DIRECTORY ${GOOGLETEST_DEPS_DIR})
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         add_subdirectory(${GOOGLETEST_DEPS_DIR}/src ${GOOGLETEST_DEPS_DIR}/build)
+        target_compile_features(gmock_main PRIVATE $<TARGET_PROPERTY:EnTT,INTERFACE_COMPILE_FEATURES>)
+        target_compile_features(gmock PRIVATE $<TARGET_PROPERTY:EnTT,INTERFACE_COMPILE_FEATURES>)
         add_library(GTest::Main ALIAS gtest_main)
     endif()
 
     option(BUILD_BENCHMARK "Build benchmark." OFF)
+    option(BUILD_LIB "Build lib example." OFF)
     option(BUILD_MOD "Build mod example." OFF)
     option(BUILD_SNAPSHOT "Build snapshot example." OFF)
+
+    if(BUILD_MOD)
+        enable_language(C)
+    endif()
 
     enable_testing()
     add_subdirectory(test)
@@ -209,13 +219,16 @@ endif()
 # AOB
 #
 
+FILE(GLOB GH_WORKFLOWS .github/workflows/*.yml)
+
 add_custom_target(
     entt_aob
     SOURCES
-        appveyor.yml
+        ${GH_WORKFLOWS}
+        .github/FUNDING.yml
         AUTHORS
+        CONTRIBUTING.md
         LICENSE
         README.md
         TODO
-        .travis.yml
 )
