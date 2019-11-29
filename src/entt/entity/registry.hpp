@@ -1841,9 +1841,7 @@ public:
     template<typename Component>
     storage<Entity, Component>& component_pool()
     {
-      const auto ctype = to_integer(type<Component>());
-      sparse_set<Entity>& pool = *(pools[ctype].pool.get());
-      return static_cast<storage<Entity, Component>&>(pool);
+      return *assure<Component>();
     }
 
 private:
