@@ -9,7 +9,7 @@
 #include <functional>
 #include <type_traits>
 #include "../config/config.h"
-#include "entt_delegate.hpp"
+#include "delegate.hpp"
 #include "fwd.hpp"
 
 
