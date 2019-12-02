@@ -5,9 +5,9 @@
 namespace entt {
 
 
-/*! @class delegate */
+/*! @class entt_delegate */
 template<typename>
-class delegate;
+class entt_delegate;
 
 /*! @class sink */
 template<typename>

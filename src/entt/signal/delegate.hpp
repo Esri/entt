@@ -77,22 +77,22 @@ constexpr connect_arg_t<Func> connect_arg{};
 
 
 /**
- * @brief Basic delegate implementation.
+ * @brief Basic entt_delegate implementation.
  *
  * Primary template isn't defined on purpose. All the specializations give a
  * compile-time error unless the template parameter is a function type.
  */
 template<typename>
-class delegate;
+class entt_delegate;
 
 
 /**
  * @brief Utility class to use to send around functions and members.
  *
- * Unmanaged delegate for function pointers and members. Users of this class are
+ * Unmanaged entt_delegate for function pointers and members. Users of this class are
  * in charge of disconnecting instances before deleting them.
  *
- * A delegate can be used as general purpose invoker with no memory overhead for
+ * A entt_delegate can be used as general purpose invoker with no memory overhead for
  * free functions (with or without payload) and members provided along with an
  * instance on which to invoke them.
  *
@@ -100,7 +100,7 @@ class delegate;
  * @tparam Args Types of arguments of a function type.
  */
 template<typename Ret, typename... Args>
-class delegate<Ret(Args...)> {
+class entt_delegate<Ret(Args...)> {
     using proto_fn_type = Ret(const void *, std::tuple<Args &&...>);
 
     template<auto Function, std::size_t... Index>
@@ -139,55 +139,55 @@ class delegate<Ret(Args...)> {
     }
 
 public:
-    /*! @brief Function type of the delegate. */
+    /*! @brief Function type of the entt_delegate. */
     using function_type = Ret(Args...);
 
     /*! @brief Default constructor. */
-    delegate() ENTT_NOEXCEPT
+    entt_delegate() ENTT_NOEXCEPT
         : fn{nullptr}, data{nullptr}
     {}
 
     /**
-     * @brief Constructs a delegate and connects a free function to it.
+     * @brief Constructs a entt_delegate and connects a free function to it.
      * @tparam Function A valid free function pointer.
      */
     template<auto Function>
-    delegate(connect_arg_t<Function>) ENTT_NOEXCEPT
-        : delegate{}
+    entt_delegate(connect_arg_t<Function>) ENTT_NOEXCEPT
+        : entt_delegate{}
     {
         connect<Function>();
     }
 
     /**
-     * @brief Constructs a delegate and connects a member for a given instance
+     * @brief Constructs a entt_delegate and connects a member for a given instance
      * or a free function with payload.
-     * @tparam Candidate Member or free function to connect to the delegate.
+     * @tparam Candidate Member or free function to connect to the entt_delegate.
      * @tparam Type Type of class or type of payload.
      * @param value_or_instance A valid reference that fits the purpose.
      */
     template<auto Candidate, typename Type>
-    delegate(connect_arg_t<Candidate>, Type &value_or_instance) ENTT_NOEXCEPT
-        : delegate{}
+    entt_delegate(connect_arg_t<Candidate>, Type &value_or_instance) ENTT_NOEXCEPT
+        : entt_delegate{}
     {
         connect<Candidate>(value_or_instance);
     }
 
     /**
-     * @brief Constructs a delegate and connects a member for a given instance
+     * @brief Constructs a entt_delegate and connects a member for a given instance
      * or a free function with payload.
-     * @tparam Candidate Member or free function to connect to the delegate.
+     * @tparam Candidate Member or free function to connect to the entt_delegate.
      * @tparam Type Type of class or type of payload.
      * @param value_or_instance A valid pointer that fits the purpose.
      */
     template<auto Candidate, typename Type>
-    delegate(connect_arg_t<Candidate>, Type *value_or_instance) ENTT_NOEXCEPT
-        : delegate{}
+    entt_delegate(connect_arg_t<Candidate>, Type *value_or_instance) ENTT_NOEXCEPT
+        : entt_delegate{}
     {
         connect<Candidate>(value_or_instance);
     }
 
     /**
-     * @brief Connects a free function to a delegate.
+     * @brief Connects a free function to a entt_delegate.
      * @tparam Function A valid free function pointer.
      */
     template<auto Function>
@@ -197,16 +197,16 @@ public:
 
     /**
      * @brief Connects a member function for a given instance or a free function
-     * with payload to a delegate.
+     * with payload to a entt_delegate.
      *
-     * The delegate isn't responsible for the connected object or the payload.
+     * The entt_delegate isn't responsible for the connected object or the payload.
      * Users must always guarantee that the lifetime of the instance overcomes
-     * the one  of the delegate.<br/>
+     * the one  of the entt_delegate.<br/>
      * When used to connect a free function with payload, its signature must be
      * such that the instance is the first argument before the ones used to
-     * define the delegate itself.
+     * define the entt_delegate itself.
      *
-     * @tparam Candidate Member or free function to connect to the delegate.
+     * @tparam Candidate Member or free function to connect to the entt_delegate.
      * @tparam Type Type of class or type of payload.
      * @param value_or_instance A valid reference that fits the purpose.
      */
@@ -217,16 +217,16 @@ public:
 
     /**
      * @brief Connects a member function for a given instance or a free function
-     * with payload to a delegate.
+     * with payload to a entt_delegate.
      *
-     * The delegate isn't responsible for the connected object or the payload.
+     * The entt_delegate isn't responsible for the connected object or the payload.
      * Users must always guarantee that the lifetime of the instance overcomes
-     * the one  of the delegate.<br/>
+     * the one  of the entt_delegate.<br/>
      * When used to connect a free function with payload, its signature must be
      * such that the instance is the first argument before the ones used to
-     * define the delegate itself.
+     * define the entt_delegate itself.
      *
-     * @tparam Candidate Member or free function to connect to the delegate.
+     * @tparam Candidate Member or free function to connect to the entt_delegate.
      * @tparam Type Type of class or type of payload.
      * @param value_or_instance A valid pointer that fits the purpose.
      */
@@ -236,9 +236,9 @@ public:
     }
 
     /**
-     * @brief Resets a delegate.
+     * @brief Resets a entt_delegate.
      *
-     * After a reset, a delegate cannot be invoked anymore.
+     * After a reset, a entt_delegate cannot be invoked anymore.
      */
     void reset() ENTT_NOEXCEPT {
         fn = nullptr;
@@ -246,7 +246,7 @@ public:
     }
 
     /**
-     * @brief Returns the instance or the payload linked to a delegate, if any.
+     * @brief Returns the instance or the payload linked to a entt_delegate, if any.
      * @return An opaque pointer to the underlying data.
      */
     const void * instance() const ENTT_NOEXCEPT {
@@ -254,15 +254,15 @@ public:
     }
 
     /**
-     * @brief Triggers a delegate.
+     * @brief Triggers a entt_delegate.
      *
-     * The delegate invokes the underlying function and returns the result.
+     * The entt_delegate invokes the underlying function and returns the result.
      *
      * @warning
-     * Attempting to trigger an invalid delegate results in undefined
+     * Attempting to trigger an invalid entt_delegate results in undefined
      * behavior.<br/>
      * An assertion will abort the execution at runtime in debug mode if the
-     * delegate has not yet been set.
+     * entt_delegate has not yet been set.
      *
      * @param args Arguments to use to invoke the underlying function.
      * @return The value returned by the underlying function.
@@ -273,8 +273,8 @@ public:
     }
 
     /**
-     * @brief Checks whether a delegate actually stores a listener.
-     * @return False if the delegate is empty, true otherwise.
+     * @brief Checks whether a entt_delegate actually stores a listener.
+     * @return False if the entt_delegate is empty, true otherwise.
      */
     explicit operator bool() const ENTT_NOEXCEPT {
         // no need to test also data
@@ -286,7 +286,7 @@ public:
      * @param other Delegate with which to compare.
      * @return False if the two contents differ, true otherwise.
      */
-    bool operator==(const delegate<Ret(Args...)> &other) const ENTT_NOEXCEPT {
+    bool operator==(const entt_delegate<Ret(Args...)> &other) const ENTT_NOEXCEPT {
         return fn == other.fn && data == other.data;
     }
 
@@ -300,12 +300,12 @@ private:
  * @brief Compares the contents of two delegates.
  * @tparam Ret Return type of a function type.
  * @tparam Args Types of arguments of a function type.
- * @param lhs A valid delegate object.
- * @param rhs A valid delegate object.
+ * @param lhs A valid entt_delegate object.
+ * @param rhs A valid entt_delegate object.
  * @return True if the two contents differ, false otherwise.
  */
 template<typename Ret, typename... Args>
-bool operator!=(const delegate<Ret(Args...)> &lhs, const delegate<Ret(Args...)> &rhs) ENTT_NOEXCEPT {
+bool operator!=(const entt_delegate<Ret(Args...)> &lhs, const entt_delegate<Ret(Args...)> &rhs) ENTT_NOEXCEPT {
     return !(lhs == rhs);
 }
 
@@ -313,42 +313,42 @@ bool operator!=(const delegate<Ret(Args...)> &lhs, const delegate<Ret(Args...)> 
 /**
  * @brief Deduction guide.
  *
- * It allows to deduce the function type of the delegate directly from a
+ * It allows to deduce the function type of the entt_delegate directly from a
  * function provided to the constructor.
  *
  * @tparam Function A valid free function pointer.
  */
 template<auto Function>
-delegate(connect_arg_t<Function>) ENTT_NOEXCEPT
--> delegate<std::remove_pointer_t<internal::to_function_pointer_t<decltype(Function)>>>;
+entt_delegate(connect_arg_t<Function>) ENTT_NOEXCEPT
+-> entt_delegate<std::remove_pointer_t<internal::to_function_pointer_t<decltype(Function)>>>;
 
 
 /**
  * @brief Deduction guide.
  *
- * It allows to deduce the function type of the delegate directly from a member
+ * It allows to deduce the function type of the entt_delegate directly from a member
  * or a free function with payload provided to the constructor.
  *
- * @tparam Candidate Member or free function to connect to the delegate.
+ * @tparam Candidate Member or free function to connect to the entt_delegate.
  * @tparam Type Type of class or type of payload.
  */
 template<auto Candidate, typename Type>
-delegate(connect_arg_t<Candidate>, Type &) ENTT_NOEXCEPT
--> delegate<std::remove_pointer_t<internal::to_function_pointer_t<decltype(Candidate), Type *>>>;
+entt_delegate(connect_arg_t<Candidate>, Type &) ENTT_NOEXCEPT
+-> entt_delegate<std::remove_pointer_t<internal::to_function_pointer_t<decltype(Candidate), Type *>>>;
 
 
 /**
  * @brief Deduction guide.
  *
- * It allows to deduce the function type of the delegate directly from a member
+ * It allows to deduce the function type of the entt_delegate directly from a member
  * or a free function with payload provided to the constructor.
  *
- * @tparam Candidate Member or free function to connect to the delegate.
+ * @tparam Candidate Member or free function to connect to the entt_delegate.
  * @tparam Type Type of class or type of payload.
  */
 template<auto Candidate, typename Type>
-delegate(connect_arg_t<Candidate>, Type *) ENTT_NOEXCEPT
--> delegate<std::remove_pointer_t<internal::to_function_pointer_t<decltype(Candidate), Type *>>>;
+entt_delegate(connect_arg_t<Candidate>, Type *) ENTT_NOEXCEPT
+-> entt_delegate<std::remove_pointer_t<internal::to_function_pointer_t<decltype(Candidate), Type *>>>;
 
 
 }

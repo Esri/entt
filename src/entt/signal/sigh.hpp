@@ -9,7 +9,7 @@
 #include <functional>
 #include <type_traits>
 #include "../config/config.h"
-#include "delegate.hpp"
+#include "entt_delegate.hpp"
 #include "fwd.hpp"
 
 
@@ -138,7 +138,7 @@ public:
     }
 
 private:
-    std::vector<delegate<Ret(Args...)>> calls;
+    std::vector<entt_delegate<Ret(Args...)>> calls;
 };
 
 
@@ -154,7 +154,7 @@ class connection {
     template<typename>
     friend class sink;
 
-    connection(delegate<void(void *)> fn, void *ref)
+    connection(entt_delegate<void(void *)> fn, void *ref)
         : disconnect{fn}, signal{ref}
     {}
 
@@ -211,7 +211,7 @@ public:
     }
 
 private:
-    delegate<void(void *)> disconnect;
+    entt_delegate<void(void *)> disconnect;
     void *signal{};
 };
 
@@ -339,7 +339,7 @@ public:
      */
     template<auto Function>
     sink before() {
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Function>();
 
         const auto &calls = signal->calls;
@@ -360,7 +360,7 @@ public:
      */
     template<auto Candidate, typename Type>
     sink before(Type &value_or_instance) {
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Candidate>(value_or_instance);
 
         const auto &calls = signal->calls;
@@ -381,7 +381,7 @@ public:
      */
     template<auto Candidate, typename Type>
     sink before(Type *value_or_instance) {
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Candidate>(value_or_instance);
 
         const auto &calls = signal->calls;
@@ -417,8 +417,8 @@ public:
 
         if(value_or_instance) {
             const auto &calls = signal->calls;
-            const auto it = std::find_if(calls.cbegin(), calls.cend(), [value_or_instance](const auto &delegate) {
-                return delegate.instance() == value_or_instance;
+            const auto it = std::find_if(calls.cbegin(), calls.cend(), [value_or_instance](const auto &entt_delegate) {
+                return entt_delegate.instance() == value_or_instance;
             });
 
             other.offset = std::distance(it, calls.cend());
@@ -450,11 +450,11 @@ public:
     connection connect() {
         disconnect<Function>();
 
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Function>();
         signal->calls.insert(signal->calls.end() - offset, std::move(call));
 
-        delegate<void(void *)> conn{};
+        entt_delegate<void(void *)> conn{};
         conn.template connect<&release<Function>>();
         return { std::move(conn), signal };
     }
@@ -465,11 +465,11 @@ public:
      *
      * The signal isn't responsible for the connected object or the payload.
      * Users must always guarantee that the lifetime of the instance overcomes
-     * the one  of the delegate. On the other side, the signal handler performs
+     * the one  of the entt_delegate. On the other side, the signal handler performs
      * checks to avoid multiple connections for the same function.<br/>
      * When used to connect a free function with payload, its signature must be
      * such that the instance is the first argument before the ones used to
-     * define the delegate itself.
+     * define the entt_delegate itself.
      *
      * @tparam Candidate Member or free function to connect to the signal.
      * @tparam Type Type of class or type of payload.
@@ -480,11 +480,11 @@ public:
     connection connect(Type &value_or_instance) {
         disconnect<Candidate>(value_or_instance);
 
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Candidate>(value_or_instance);
         signal->calls.insert(signal->calls.end() - offset, std::move(call));
 
-        delegate<void(void *)> conn{};
+        entt_delegate<void(void *)> conn{};
         conn.template connect<&release<Candidate, Type &>>(value_or_instance);
         return { std::move(conn), signal };
     }
@@ -495,11 +495,11 @@ public:
      *
      * The signal isn't responsible for the connected object or the payload.
      * Users must always guarantee that the lifetime of the instance overcomes
-     * the one  of the delegate. On the other side, the signal handler performs
+     * the one  of the entt_delegate. On the other side, the signal handler performs
      * checks to avoid multiple connections for the same function.<br/>
      * When used to connect a free function with payload, its signature must be
      * such that the instance is the first argument before the ones used to
-     * define the delegate itself.
+     * define the entt_delegate itself.
      *
      * @tparam Candidate Member or free function to connect to the signal.
      * @tparam Type Type of class or type of payload.
@@ -510,11 +510,11 @@ public:
     connection connect(Type *value_or_instance) {
         disconnect<Candidate>(value_or_instance);
 
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Candidate>(value_or_instance);
         signal->calls.insert(signal->calls.end() - offset, std::move(call));
 
-        delegate<void(void *)> conn{};
+        entt_delegate<void(void *)> conn{};
         conn.template connect<&release<Candidate, Type *>>(value_or_instance);
         return { std::move(conn), signal };
     }
@@ -526,7 +526,7 @@ public:
     template<auto Function>
     void disconnect() {
         auto &calls = signal->calls;
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Function>();
         calls.erase(std::remove(calls.begin(), calls.end(), std::move(call)), calls.end());
     }
@@ -541,7 +541,7 @@ public:
     template<auto Candidate, typename Type>
     void disconnect(Type &value_or_instance) {
         auto &calls = signal->calls;
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Candidate>(value_or_instance);
         calls.erase(std::remove(calls.begin(), calls.end(), std::move(call)), calls.end());
     }
@@ -556,7 +556,7 @@ public:
     template<auto Candidate, typename Type>
     void disconnect(Type *value_or_instance) {
         auto &calls = signal->calls;
-        delegate<Ret(Args...)> call{};
+        entt_delegate<Ret(Args...)> call{};
         call.template connect<Candidate>(value_or_instance);
         calls.erase(std::remove(calls.begin(), calls.end(), std::move(call)), calls.end());
     }
@@ -582,8 +582,8 @@ public:
     void disconnect(Type *value_or_instance) {
         if(value_or_instance) {
             auto &calls = signal->calls;
-            calls.erase(std::remove_if(calls.begin(), calls.end(), [value_or_instance](const auto &delegate) {
-                return delegate.instance() == value_or_instance;
+            calls.erase(std::remove_if(calls.begin(), calls.end(), [value_or_instance](const auto &entt_delegate) {
+                return entt_delegate.instance() == value_or_instance;
             }), calls.end());
         }
     }
