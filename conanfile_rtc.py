@@ -19,6 +19,3 @@ class EnttConan(ConanFile):
 
         # headers
         self.copy("*.h*", src=base + "src/entt", dst=relative + "src/entt")
-
-    def package_id(self):
-        self.info.header_only()
