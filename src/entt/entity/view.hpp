@@ -249,8 +249,10 @@ class basic_common_view {
 protected:
     /*! @cond TURN_OFF_DOXYGEN */
     basic_common_view() noexcept {
-        for(size_type pos{}; pos < Exclude; ++pos) {
-            filter[pos] = internal::view_placeholder<Type>();
+        if constexpr(Exclude) {
+            for(size_type pos{}; pos < Exclude; ++pos) {
+                filter[pos] = internal::view_placeholder<Type>();
+            }
         }
     }
 
