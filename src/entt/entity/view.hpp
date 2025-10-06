@@ -256,8 +256,10 @@ class basic_common_view {
 protected:
     /*! @cond TURN_OFF_DOXYGEN */
     basic_common_view() noexcept {
-        for(size_type pos{}, last = filter.size(); pos < last; ++pos) {
-            filter[pos] = placeholder;
+        if constexpr(Exclude > 0) { // Esri, RTC
+            for(size_type pos{}, last = filter.size(); pos < last; ++pos) {
+                filter[pos] = placeholder;
+            }
         }
     }
 
