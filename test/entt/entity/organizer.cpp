@@ -3,11 +3,14 @@
 #include <utility>
 #include <gtest/gtest.h>
 #include <entt/core/type_info.hpp>
+#include <entt/entity/group.hpp>
+#include <entt/entity/mixin.hpp>
 #include <entt/entity/organizer.hpp>
 #include <entt/entity/registry.hpp>
+#include <entt/entity/view.hpp>
 
 void ro_int_rw_char_double(entt::view<entt::get_t<const int, char>>, double &) {}
-void ro_char_rw_int(entt::view<entt::get_t<int, const char>>) {}
+void ro_char_rw_int(entt::group<entt::owned_t<int>, entt::get_t<const char>>) {}
 void ro_char_rw_double(entt::view<entt::get_t<const char>>, double &) {}
 void ro_int_double(entt::view<entt::get_t<const int>>, const double &) {}
 void sync_point(entt::registry &, entt::view<entt::get_t<const int>>) {}
@@ -19,7 +22,7 @@ struct clazz {
     void rw_int_char_double(entt::view<entt::get_t<int, char>>, double &) {}
 
     static void ro_int_with_payload(const clazz &, entt::view<entt::get_t<const int>>) {}
-    static void ro_char_with_payload(const clazz &, entt::view<entt::get_t<const char>>) {}
+    static void ro_char_with_payload(const clazz &, entt::group<entt::owned_t<const char>>) {}
     static void ro_int_char_with_payload(clazz &, entt::view<entt::get_t<const int, const char>>) {}
 };
 
@@ -82,7 +85,7 @@ TEST(Organizer, EmplaceFreeFunction) {
     ASSERT_EQ(graph[0u].out_edges()[0u], 1u);
     ASSERT_EQ(graph[0u].out_edges()[1u], 2u);
     ASSERT_EQ(graph[1u].out_edges()[0u], 3u);
-    ASSERT_EQ(graph[2u].children()[0u], 3u); // NOLINT
+    ASSERT_EQ(graph[2u].out_edges()[0u], 3u);
 
     for(auto &&vertex: graph) {
         typename entt::organizer::function_type *cb = vertex.callback();
@@ -148,7 +151,7 @@ TEST(Organizer, EmplaceMemberFunction) {
 
     ASSERT_EQ(graph[0u].out_edges()[0u], 1u);
     ASSERT_EQ(graph[1u].out_edges()[0u], 2u);
-    ASSERT_EQ(graph[2u].children()[0u], 3u); // NOLINT
+    ASSERT_EQ(graph[2u].out_edges()[0u], 3u);
 
     for(auto &&vertex: graph) {
         typename entt::organizer::function_type *cb = vertex.callback();
@@ -221,7 +224,7 @@ TEST(Organizer, EmplaceFreeFunctionWithPayload) {
     ASSERT_EQ(graph[0u].out_edges()[0u], 4u);
     ASSERT_EQ(graph[1u].out_edges()[0u], 4u);
     ASSERT_EQ(graph[2u].out_edges()[0u], 3u);
-    ASSERT_EQ(graph[3u].children()[0u], 4u); // NOLINT
+    ASSERT_EQ(graph[3u].out_edges()[0u], 4u);
 
     for(auto &&vertex: graph) {
         typename entt::organizer::function_type *cb = vertex.callback();
@@ -303,7 +306,7 @@ TEST(Organizer, EmplaceDirectFunction) {
 
     ASSERT_EQ(graph[0u].out_edges()[0u], 1u);
     ASSERT_EQ(graph[1u].out_edges()[0u], 2u);
-    ASSERT_EQ(graph[2u].children()[0u], 3u); // NOLINT
+    ASSERT_EQ(graph[2u].out_edges()[0u], 3u);
 
     for(auto &&vertex: graph) {
         typename entt::organizer::function_type *cb = vertex.callback();
@@ -370,7 +373,7 @@ TEST(Organizer, SyncPoint) {
     ASSERT_EQ(graph[1u].out_edges()[1u], 3u);
     ASSERT_EQ(graph[2u].out_edges()[0u], 4u);
     ASSERT_EQ(graph[3u].out_edges()[0u], 4u);
-    ASSERT_EQ(graph[4u].children()[0u], 5u); // NOLINT
+    ASSERT_EQ(graph[4u].out_edges()[0u], 5u);
 
     for(auto &&vertex: graph) {
         typename entt::organizer::function_type *cb = vertex.callback();
@@ -407,7 +410,7 @@ TEST(Organizer, Override) {
     ASSERT_EQ(graph[2u].out_edges().size(), 0u);
 
     ASSERT_EQ(graph[0u].out_edges()[0u], 2u);
-    ASSERT_EQ(graph[1u].children()[0u], 2u); // NOLINT
+    ASSERT_EQ(graph[1u].out_edges()[0u], 2u);
 }
 
 TEST(Organizer, Prepare) {

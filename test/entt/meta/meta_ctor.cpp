@@ -50,15 +50,15 @@ struct MetaCtor: ::testing::Test {
     void SetUp() override {
         using namespace entt::literals;
 
-        entt::meta<double>()
+        entt::meta_factory<double>{}
             .type("double"_hs)
             .ctor<double_factory>();
 
-        entt::meta<derived>()
+        entt::meta_factory<derived>{}
             .type("derived"_hs)
             .base<base>();
 
-        entt::meta<clazz>()
+        entt::meta_factory<clazz>{}
             .type("clazz"_hs)
             .ctor<&entt::registry::emplace_or_replace<clazz, const int &, const char &>, entt::as_ref_t>()
             .ctor<const base &, int &>()
@@ -73,7 +73,7 @@ struct MetaCtor: ::testing::Test {
     }
 };
 
-TEST_F(MetaCtor, Functionalities) {
+TEST_F(MetaCtor, Ctor) {
     auto any = entt::resolve<clazz>().construct(1, 'c');
 
     ASSERT_TRUE(any);

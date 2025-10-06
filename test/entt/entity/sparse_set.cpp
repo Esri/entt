@@ -4,10 +4,10 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <type_traits>
 #include <utility>
 #include <gtest/gtest.h>
 #include <entt/config/config.h>
-#include <entt/core/any.hpp>
 #include <entt/core/type_info.hpp>
 #include <entt/entity/entity.hpp>
 #include <entt/entity/sparse_set.hpp>
@@ -273,15 +273,154 @@ TYPED_TEST(SparseSet, Capacity) {
     for(const auto policy: this->deletion_policy) {
         sparse_set_type set{policy};
 
-        set.reserve(64);
+        set.reserve(64u);
 
         ASSERT_EQ(set.capacity(), 64u);
         ASSERT_TRUE(set.empty());
 
-        set.reserve(0);
+        set.reserve(0u);
 
         ASSERT_EQ(set.capacity(), 64u);
         ASSERT_TRUE(set.empty());
+    }
+}
+
+TYPED_TEST(SparseSet, ShrinkToFit) {
+    using entity_type = typename TestFixture::type;
+    using sparse_set_type = entt::basic_sparse_set<entity_type>;
+    using traits_type = entt::entt_traits<entity_type>;
+
+    for(const auto policy: this->deletion_policy) {
+        sparse_set_type set{policy};
+
+        ASSERT_EQ(set.capacity(), 0u);
+        ASSERT_EQ(set.extent(), 0u);
+
+        switch(policy) {
+        case entt::deletion_policy::swap_and_pop: {
+            set.push(entity_type{traits_type::page_size - 1u});
+            set.push(entity_type{traits_type::page_size});
+
+            set.erase(entity_type{traits_type::page_size - 1u});
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            set.shrink_to_fit();
+
+            ASSERT_EQ(set.capacity(), 1u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_TRUE(set.contains(entity_type{traits_type::page_size}));
+
+            set.push(entity_type{traits_type::page_size - 1u});
+            set.erase(entity_type{traits_type::page_size});
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            set.shrink_to_fit();
+
+            ASSERT_EQ(set.capacity(), 1u);
+            ASSERT_EQ(set.extent(), traits_type::page_size);
+
+            ASSERT_TRUE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size}));
+
+            set.erase(entity_type{traits_type::page_size - 1u});
+
+            set.shrink_to_fit();
+
+            ASSERT_EQ(set.capacity(), 0u);
+            ASSERT_EQ(set.extent(), 0u);
+
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size}));
+        } break;
+        case entt::deletion_policy::in_place: {
+            set.push(entity_type{traits_type::page_size - 1u});
+            set.push(entity_type{traits_type::page_size});
+
+            set.erase(entity_type{traits_type::page_size - 1u});
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            set.shrink_to_fit();
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_TRUE(set.contains(entity_type{traits_type::page_size}));
+
+            set.push(entity_type{traits_type::page_size - 1u});
+            set.erase(entity_type{traits_type::page_size});
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            set.shrink_to_fit();
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), traits_type::page_size);
+
+            ASSERT_TRUE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size}));
+
+            set.erase(entity_type{traits_type::page_size - 1u});
+
+            set.shrink_to_fit();
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 0u);
+
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size}));
+        } break;
+        case entt::deletion_policy::swap_only: {
+            set.push(entity_type{traits_type::page_size - 1u});
+            set.push(entity_type{traits_type::page_size});
+
+            set.erase(entity_type{traits_type::page_size - 1u});
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            set.shrink_to_fit();
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_TRUE(set.contains(entity_type{traits_type::page_size}));
+
+            set.push(entity_type{traits_type::page_size - 1u});
+            set.erase(entity_type{traits_type::page_size});
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            set.shrink_to_fit();
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            ASSERT_TRUE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size}));
+
+            set.erase(entity_type{traits_type::page_size - 1u});
+
+            set.shrink_to_fit();
+
+            ASSERT_GE(set.capacity(), 2u);
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size - 1u}));
+            ASSERT_FALSE(set.contains(entity_type{traits_type::page_size}));
+        } break;
+        }
     }
 }
 
@@ -322,7 +461,15 @@ TYPED_TEST(SparseSet, Pagination) {
 
         set.shrink_to_fit();
 
-        ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+        switch(policy) {
+        case entt::deletion_policy::swap_and_pop:
+        case entt::deletion_policy::in_place: {
+            ASSERT_EQ(set.extent(), 0u);
+        } break;
+        case entt::deletion_policy::swap_only: {
+            ASSERT_EQ(set.extent(), 2 * traits_type::page_size);
+        } break;
+        }
     }
 }
 
@@ -346,6 +493,7 @@ TYPED_TEST(SparseSet, Contiguous) {
         set.erase(entity);
 
         switch(policy) {
+        case entt::deletion_policy::swap_only:
         case entt::deletion_policy::swap_and_pop: {
             ASSERT_TRUE(set.contiguous());
 
@@ -364,13 +512,6 @@ TYPED_TEST(SparseSet, Contiguous) {
             set.erase(entity);
 
             ASSERT_FALSE(set.contiguous());
-
-            set.clear();
-
-            ASSERT_TRUE(set.contiguous());
-        } break;
-        case entt::deletion_policy::swap_only: {
-            ASSERT_TRUE(set.contiguous());
 
             set.clear();
 
@@ -442,7 +583,6 @@ TYPED_TEST(SparseSet, Bind) {
         sparse_set_type set{policy};
 
         ASSERT_NO_THROW(set.bind(0));
-        ASSERT_NO_THROW(set.bind(entt::make_any<int>(0)));
     }
 }
 
@@ -2027,6 +2167,7 @@ TYPED_TEST(SparseSet, CustomAllocator) {
         ASSERT_EQ(set.capacity(), 2u);
         ASSERT_EQ(set.size(), 2u);
 
+        other = {};
         set.swap(other);
         set = std::move(other);
         test::is_initialized(other);
