@@ -50,6 +50,7 @@ function(SETUP_TARGET TARGET_NAME)
                     -Wdocumentation
                     -Wno-deprecated-declarations
                     -Wno-exceptions
+                    -Wconversion
                 >
                 /EHsc /wd4324 /wd4996
                 # disabling INCREMENTAL is required by SizeBench
@@ -70,6 +71,7 @@ function(SETUP_TARGET TARGET_NAME)
                 -fvisibility=hidden
                 -pedantic
                 -Wall
+                -Wconversion
                 -Wno-deprecated-declarations
                 -Wshadow
                 $<$<CONFIG:Debug>:-O0 -g>
@@ -117,6 +119,8 @@ function(SETUP_LIB_PLUGIN_TEST TEST_NAME SUB_PATH)
     set_target_properties(lib_${TARGET_NAME} PROPERTIES CXX_CLANG_TIDY "")
     target_include_directories(_${TARGET_NAME} PRIVATE ${cr_INCLUDE_DIR})
     target_include_directories(lib_${TARGET_NAME} PRIVATE ${cr_INCLUDE_DIR})
+    target_compile_options(_${TARGET_NAME} PRIVATE $<$<NOT:$<STREQUAL:"${CMAKE_CXX_COMPILER_ID}","MSVC">>:-Wno-conversion>)
+    target_compile_options(lib_${TARGET_NAME} PRIVATE $<$<NOT:$<STREQUAL:"${CMAKE_CXX_COMPILER_ID}","MSVC">>:-Wno-conversion>)
     target_link_libraries(lib_${TARGET_NAME} PRIVATE ${CMAKE_DL_LIBS})
     add_dependencies(lib_${TARGET_NAME} _${TARGET_NAME})
 endfunction()
@@ -169,6 +173,9 @@ if(ENTT_BUILD_LIB)
 
     SETUP_LIB_SHARED_TEST(registry shared)
     SETUP_LIB_PLUGIN_TEST(registry plugin)
+
+    SETUP_LIB_SHARED_TEST(view shared)
+    SETUP_LIB_PLUGIN_TEST(view plugin)
 endif()
 
 # Test snapshot
@@ -192,6 +199,7 @@ if(ENTT_BUILD_SNAPSHOT)
 
     set_target_properties(cereal PROPERTIES CXX_CLANG_TIDY "")
     target_include_directories(cereal PRIVATE ${cereal_INCLUDE_DIR})
+    target_compile_options(cereal PRIVATE $<$<NOT:$<STREQUAL:"${CMAKE_CXX_COMPILER_ID}","MSVC">>:-Wno-conversion>)
 endif()
 
 # Test config
@@ -229,7 +237,6 @@ SETUP_BASIC_TEST(entity entt/entity/entity.cpp)
 SETUP_BASIC_TEST(group entt/entity/group.cpp)
 SETUP_BASIC_TEST(handle entt/entity/handle.cpp)
 SETUP_BASIC_TEST(helper entt/entity/helper.cpp)
-SETUP_BASIC_TEST(observer entt/entity/observer.cpp)
 SETUP_BASIC_TEST(organizer entt/entity/organizer.cpp)
 SETUP_BASIC_TEST(reactive_mixin entt/entity/reactive_mixin.cpp)
 SETUP_BASIC_TEST(registry entt/entity/registry.cpp)
@@ -265,10 +272,10 @@ SETUP_BASIC_TEST(meta_ctor entt/meta/meta_ctor.cpp)
 SETUP_BASIC_TEST(meta_custom entt/meta/meta_custom.cpp)
 SETUP_BASIC_TEST(meta_data entt/meta/meta_data.cpp)
 SETUP_BASIC_TEST(meta_dtor entt/meta/meta_dtor.cpp)
+SETUP_BASIC_TEST(meta_factory entt/meta/meta_factory.cpp)
 SETUP_BASIC_TEST(meta_func entt/meta/meta_func.cpp)
 SETUP_BASIC_TEST(meta_handle entt/meta/meta_handle.cpp)
 SETUP_BASIC_TEST(meta_pointer entt/meta/meta_pointer.cpp)
-SETUP_BASIC_TEST(meta_prop entt/meta/meta_prop.cpp)
 SETUP_BASIC_TEST(meta_range entt/meta/meta_range.cpp)
 SETUP_BASIC_TEST(meta_template entt/meta/meta_template.cpp)
 SETUP_BASIC_TEST(meta_type entt/meta/meta_type.cpp)

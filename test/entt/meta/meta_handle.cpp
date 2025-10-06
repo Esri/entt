@@ -20,7 +20,7 @@ struct MetaHandle: ::testing::Test {
     void SetUp() override {
         using namespace entt::literals;
 
-        entt::meta<clazz>()
+        entt::meta_factory<clazz>{}
             .type("clazz"_hs)
             .func<&clazz::incr>("incr"_hs)
             .func<&clazz::decr>("decr"_hs);
@@ -31,7 +31,7 @@ struct MetaHandle: ::testing::Test {
     }
 };
 
-TEST_F(MetaHandle, Functionalities) {
+TEST_F(MetaHandle, Handle) {
     using namespace entt::literals;
 
     clazz instance{};

@@ -30,7 +30,7 @@ struct MetaConv: ::testing::Test {
     void SetUp() override {
         using namespace entt::literals;
 
-        entt::meta<clazz>()
+        entt::meta_factory<clazz>{}
             .type("clazz"_hs)
             .conv<int>()
             .conv<&clazz::to_bool>()
@@ -42,7 +42,7 @@ struct MetaConv: ::testing::Test {
     }
 };
 
-TEST_F(MetaConv, Functionalities) {
+TEST_F(MetaConv, Conv) {
     auto any = entt::resolve<clazz>().construct();
     any.cast<clazz &>().value = 2;
 

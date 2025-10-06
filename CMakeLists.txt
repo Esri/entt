@@ -25,7 +25,7 @@ endif()
 
 message(VERBOSE "*")
 message(VERBOSE "* ${PROJECT_NAME} v${PROJECT_VERSION} (${CMAKE_BUILD_TYPE})")
-message(VERBOSE "* Copyright (c) 2017-2024 Michele Caini <michele.caini@gmail.com>")
+message(VERBOSE "* Copyright (c) 2017-2025 Michele Caini <michele.caini@gmail.com>")
 message(VERBOSE "*")
 
 # CMake stuff
@@ -81,20 +81,6 @@ endif()
 
 # Add EnTT target
 
-option(ENTT_INCLUDE_HEADERS "Add all EnTT headers to the EnTT target." OFF)
-option(ENTT_INCLUDE_NATVIS "Add EnTT natvis files to the EnTT target." OFF)
-
-if(ENTT_INCLUDE_NATVIS)
-    if(MSVC)
-        set(ENTT_HAS_NATVIS TRUE CACHE BOOL "" FORCE)
-        mark_as_advanced(ENTT_HAS_NATVIS)
-    endif()
-
-    if(NOT ENTT_HAS_NATVIS)
-        message(VERBOSE "The option ENTT_INCLUDE_NATVIS is set but natvis files are not supported. They will not be added to the target.")
-    endif()
-endif()
-
 include(GNUInstallDirs)
 
 add_library(EnTT INTERFACE)
@@ -108,6 +94,35 @@ target_include_directories(
 )
 
 target_compile_features(EnTT INTERFACE cxx_std_17)
+
+if(ENTT_HAS_LIBCPP)
+    target_compile_options(EnTT BEFORE INTERFACE -stdlib=libc++)
+endif()
+
+if(ENTT_HAS_SANITIZER)
+    target_compile_options(EnTT INTERFACE $<$<CONFIG:Debug>:-fsanitize=address -fno-omit-frame-pointer -fsanitize=undefined>)
+    target_link_libraries(EnTT INTERFACE $<$<CONFIG:Debug>:-fsanitize=address -fno-omit-frame-pointer -fsanitize=undefined>)
+endif()
+
+if(ENTT_CLANG_TIDY_EXECUTABLE)
+    set(CMAKE_CXX_CLANG_TIDY "${ENTT_CLANG_TIDY_EXECUTABLE};--config-file=${EnTT_SOURCE_DIR}/.clang-tidy;--header-filter=${EnTT_SOURCE_DIR}/src/entt/.*")
+endif()
+
+# Add EnTT goodies
+
+option(ENTT_INCLUDE_HEADERS "Add all EnTT headers to the EnTT target." OFF)
+option(ENTT_INCLUDE_NATVIS "Add EnTT natvis files to the EnTT target." OFF)
+
+if(ENTT_INCLUDE_NATVIS)
+    if(MSVC)
+        set(ENTT_HAS_NATVIS TRUE CACHE BOOL "" FORCE)
+        mark_as_advanced(ENTT_HAS_NATVIS)
+    endif()
+
+    if(NOT ENTT_HAS_NATVIS)
+        message(VERBOSE "The option ENTT_INCLUDE_NATVIS is set but natvis files are not supported. They will not be added to the target.")
+    endif()
+endif()
 
 if(ENTT_INCLUDE_HEADERS)
     target_sources(
@@ -145,7 +160,6 @@ if(ENTT_INCLUDE_HEADERS)
             $<BUILD_INTERFACE:${EnTT_SOURCE_DIR}/src/entt/entity/handle.hpp>
             $<BUILD_INTERFACE:${EnTT_SOURCE_DIR}/src/entt/entity/mixin.hpp>
             $<BUILD_INTERFACE:${EnTT_SOURCE_DIR}/src/entt/entity/helper.hpp>
-            $<BUILD_INTERFACE:${EnTT_SOURCE_DIR}/src/entt/entity/observer.hpp>
             $<BUILD_INTERFACE:${EnTT_SOURCE_DIR}/src/entt/entity/organizer.hpp>
             $<BUILD_INTERFACE:${EnTT_SOURCE_DIR}/src/entt/entity/ranges.hpp>
             $<BUILD_INTERFACE:${EnTT_SOURCE_DIR}/src/entt/entity/registry.hpp>
@@ -210,89 +224,82 @@ if(ENTT_HAS_NATVIS)
     )
 endif()
 
-if(ENTT_HAS_SANITIZER)
-    target_compile_options(EnTT INTERFACE $<$<CONFIG:Debug>:-fsanitize=address -fno-omit-frame-pointer -fsanitize=undefined>)
-    target_link_libraries(EnTT INTERFACE $<$<CONFIG:Debug>:-fsanitize=address -fno-omit-frame-pointer -fsanitize=undefined>)
+# Install EnTT and all related files
+
+option(ENTT_INSTALL "Install EnTT and all related files." OFF)
+
+if(ENTT_INSTALL)
+    # Install pkg-config file
+
+    include(JoinPaths)
+
+    set(EnTT_PKGCONFIG ${CMAKE_CURRENT_BINARY_DIR}/entt.pc)
+
+    join_paths(EnTT_PKGCONFIG_INCLUDEDIR "\${prefix}" "${CMAKE_INSTALL_INCLUDEDIR}")
+
+    configure_file(
+        ${EnTT_SOURCE_DIR}/cmake/in/entt.pc.in
+        ${EnTT_PKGCONFIG}
+        @ONLY
+    )
+
+    install(
+        FILES ${EnTT_PKGCONFIG}
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    )
+
+    # Install EnTT
+
+    include(CMakePackageConfigHelpers)
+
+    install(
+        TARGETS EnTT
+        EXPORT EnTTTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+
+    write_basic_package_version_file(
+        EnTTConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY AnyNewerVersion
+    )
+
+    configure_package_config_file(
+        ${EnTT_SOURCE_DIR}/cmake/in/EnTTConfig.cmake.in
+        EnTTConfig.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/EnTT/cmake
+    )
+
+    export(
+        EXPORT EnTTTargets
+        FILE ${CMAKE_CURRENT_BINARY_DIR}/EnTTTargets.cmake
+        NAMESPACE EnTT::
+    )
+
+    install(
+        EXPORT EnTTTargets
+        FILE EnTTTargets.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/EnTT/cmake
+        NAMESPACE EnTT::
+    )
+
+    install(
+        FILES
+            ${PROJECT_BINARY_DIR}/EnTTConfig.cmake
+            ${PROJECT_BINARY_DIR}/EnTTConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/EnTT/cmake
+    )
+
+    install(
+        DIRECTORY src/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+    )
+
+    export(PACKAGE EnTT)
 endif()
-
-if(ENTT_CLANG_TIDY_EXECUTABLE)
-    set(CMAKE_CXX_CLANG_TIDY "${ENTT_CLANG_TIDY_EXECUTABLE};--config-file=${EnTT_SOURCE_DIR}/.clang-tidy;--header-filter=${EnTT_SOURCE_DIR}/src/entt/.*")
-endif()
-
-if(ENTT_HAS_LIBCPP)
-    target_compile_options(EnTT BEFORE INTERFACE -stdlib=libc++)
-endif()
-
-# Install pkg-config file
-
-include(JoinPaths)
-
-set(EnTT_PKGCONFIG ${CMAKE_CURRENT_BINARY_DIR}/entt.pc)
-
-join_paths(EnTT_PKGCONFIG_INCLUDEDIR "\${prefix}" "${CMAKE_INSTALL_INCLUDEDIR}")
-
-configure_file(
-    ${EnTT_SOURCE_DIR}/cmake/in/entt.pc.in
-    ${EnTT_PKGCONFIG}
-    @ONLY
-)
-
-install(
-    FILES ${EnTT_PKGCONFIG}
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
-)
-
-# Install EnTT
-
-include(CMakePackageConfigHelpers)
-
-install(
-    TARGETS EnTT
-    EXPORT EnTTTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-write_basic_package_version_file(
-    EnTTConfigVersion.cmake
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY AnyNewerVersion
-)
-
-configure_package_config_file(
-    ${EnTT_SOURCE_DIR}/cmake/in/EnTTConfig.cmake.in
-    EnTTConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/EnTT/cmake
-)
-
-export(
-    EXPORT EnTTTargets
-    FILE ${CMAKE_CURRENT_BINARY_DIR}/EnTTTargets.cmake
-    NAMESPACE EnTT::
-)
-
-install(
-    EXPORT EnTTTargets
-    FILE EnTTTargets.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/EnTT/cmake
-    NAMESPACE EnTT::
-)
-
-install(
-    FILES
-        ${PROJECT_BINARY_DIR}/EnTTConfig.cmake
-        ${PROJECT_BINARY_DIR}/EnTTConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/EnTT/cmake
-)
-
-install(
-    DIRECTORY src/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING
-    PATTERN "*.h"
-    PATTERN "*.hpp"
-)
-
-export(PACKAGE EnTT)
 
 # Tests
 
@@ -300,6 +307,7 @@ option(ENTT_BUILD_TESTING "Enable building tests." OFF)
 
 if(ENTT_BUILD_TESTING)
     option(ENTT_FIND_GTEST_PACKAGE "Enable finding gtest package." OFF)
+
     option(ENTT_BUILD_BENCHMARK "Build benchmark." OFF)
     option(ENTT_BUILD_EXAMPLE "Build examples." OFF)
     option(ENTT_BUILD_LIB "Build lib tests." OFF)
@@ -314,22 +322,10 @@ if(ENTT_BUILD_TESTING)
     add_subdirectory(test)
 endif()
 
-# Tools
-
-option(ENTT_BUILD_TOOLS "Enable building tools." OFF)
-
-if(ENTT_BUILD_TOOLS)
-    add_subdirectory(tools)
-endif()
-
 # Documentation
 
 option(ENTT_BUILD_DOCS "Enable building with documentation." OFF)
 
 if(ENTT_BUILD_DOCS)
-    find_package(Doxygen 1.10)
-
-    if(DOXYGEN_FOUND)
-        add_subdirectory(docs)
-    endif()
+    add_subdirectory(docs)
 endif()

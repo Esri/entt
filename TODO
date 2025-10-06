@@ -10,7 +10,7 @@ DOC:
 * bump entities, reserved bits on identifiers
 
 TODO:
-* deprecate non-owning groups in favor of owning views and view packs, introduce lazy owning views
+* review all NOLINT
 * bring nested groups back in place (see bd34e7f)
 * work stealing job system (see #100) + mt scheduler based on const awareness for types
 * view: reduce inst due to/improve perf with index-based approach in dispatch_get/pick_and_each/each (single type too, define storage ::at and ::at_as_tuple)
@@ -20,25 +20,18 @@ TODO:
 * self contained entity traits to avoid explicit specializations (ie enum constants)
 * auto type info data from types if present
 * test: push sharing types further
-* after non-continuous generation for entity storage:
-  - get/reset placeholder to position after saving/loading (avoid long lookup)
-  - allow skipping/reserving entity identifiers
-  - documentation for reserved entities
-* storage entity: no emplace/insert, rename and add a fast range-push from above
-* view: propagate tombstone check request to iterator
+* storage entity: fast range-push from above
 * table: pop back to support swap and pop, single column access, empty type optimization
-* checkout tools workflow
-* improve front (no multiple checks) and back (ie no contains) for multi-type view
-* cleanup common view from tricks to handle single swap-only and in-place, if constexpr branches
-* entity based component_traits
 * review cmake warning about FetchContent_Populate (need .28 and EXCLUDE_FROM_ALL for FetchContent)
-* after removing meta prop vectors, copy meta objects in their handles directly
 * suppress -Wself-move on CI with g++13
-* view and view iterator specializations for multi, single and filtered elements
-* organizer support to groups
-* meta range: move id to meta objects and return plain types (?), then remove id from meta base and meta ctor too
-* refine the storage fallback mechanism for views (ie alloc?)
-* sigh_mixin: automatic signal registration
-* sigh_mixin: change cb signature from reg/entt to storage/entt (breaking for the good)
+* view specializations for multi, single and filtered elements
 * don't pass reactive storage by default to callback
 * runtime types support for meta for types that aren't backed by C++ types
+* built-in no-pagination storage - no_pagination page size as limits::max
+* any cdynamic to support const ownership construction
+* allow passing arguments to meta setter/getter (we can fallback on meta invoke probably)
+* FetchContent_Populate -> FetchContent_MakeAvailable warnings
+* doc: IMPLICIT_DIR_DOCS for dir docs or \dir
+* meta non-const allow_cast overloads: (const int &) to (int &) is not allowed, but (const int &) to (double &) is allowed (support only for convertibles)
+* improve non-const allow cast with in-place switch
+* meta fixed_size could return the size directly if present

@@ -13,8 +13,12 @@
 #include <entt/core/hashed_string.hpp>
 #include <entt/core/type_info.hpp>
 #include <entt/entity/entity.hpp>
+#include <entt/entity/group.hpp>
+#include <entt/entity/mixin.hpp>
 #include <entt/entity/registry.hpp>
+#include <entt/entity/storage.hpp>
 #include <entt/entity/view.hpp>
+#include <entt/signal/sigh.hpp>
 #include "../../common/aggregate.h"
 #include "../../common/config.h"
 #include "../../common/empty.h"
@@ -484,16 +488,20 @@ TEST(Registry, Storage) {
     const auto entity = registry.create();
 
     testing::StaticAssertTypeEq<decltype(registry.storage<test::empty>()), entt::storage_type_t<test::empty> &>();
+    testing::StaticAssertTypeEq<decltype(registry.storage<const test::empty>()), const entt::storage_type_t<test::empty> &>();
     testing::StaticAssertTypeEq<decltype(std::as_const(registry).storage<test::empty>()), const entt::storage_type_t<test::empty> *>();
+    testing::StaticAssertTypeEq<decltype(std::as_const(registry).storage<const test::empty>()), const entt::storage_type_t<test::empty> *>();
 
     testing::StaticAssertTypeEq<decltype(registry.storage("other"_hs)), entt::storage_type_t<test::empty>::base_type *>();
     testing::StaticAssertTypeEq<decltype(std::as_const(registry).storage("other"_hs)), const entt::storage_type_t<test::empty>::base_type *>();
 
+    ASSERT_EQ(&registry.storage<test::empty>("other"_hs), &storage);
+    ASSERT_EQ(&registry.storage<const test::empty>("other"_hs), &storage);
+    ASSERT_NE(std::as_const(registry).storage<test::empty>(), &storage);
+    ASSERT_NE(std::as_const(registry).storage<const test::empty>(), &storage);
+
     ASSERT_NE(registry.storage("other"_hs), nullptr);
     ASSERT_EQ(std::as_const(registry).storage("rehto"_hs), nullptr);
-
-    ASSERT_EQ(&registry.storage<test::empty>("other"_hs), &storage);
-    ASSERT_NE(std::as_const(registry).storage<test::empty>(), &storage);
 
     ASSERT_FALSE(registry.any_of<test::empty>(entity));
     ASSERT_FALSE(storage.contains(entity));
@@ -959,6 +967,30 @@ TEST(Registry, Emplace) {
     ASSERT_EQ(ref, 4);
 }
 
+TEST(Registry, EmplaceEmpty) {
+    entt::registry registry{};
+    const auto entity = registry.create();
+
+    ASSERT_FALSE(registry.all_of<test::empty>(entity));
+
+    registry.emplace<test::empty>(entity, 4);
+
+    ASSERT_TRUE(registry.all_of<test::empty>(entity));
+}
+
+TEST(Registry, EmplaceAggregate) {
+    entt::registry registry{};
+    const auto entity = registry.create();
+
+    ASSERT_FALSE(registry.all_of<test::aggregate>(entity));
+
+    const auto &ref = registry.emplace<test::aggregate>(entity, 4);
+
+    ASSERT_TRUE(registry.all_of<test::aggregate>(entity));
+    ASSERT_EQ(registry.get<test::aggregate>(entity).value, ref.value);
+    ASSERT_EQ(ref.value, 4);
+}
+
 TEST(Registry, EmplaceTypesFromStandardTemplateLibrary) {
     // see #37 - the test shouldn't crash, that's all
     entt::registry registry{};
@@ -1066,6 +1098,21 @@ TEST(Registry, EmplaceOrReplace) {
     registry.emplace_or_replace<int>(entity, 0);
 
     ASSERT_EQ(ref, 0);
+}
+
+TEST(Registry, EmplaceOrReplaceEmpty) {
+    entt::registry registry{};
+    const auto entity = registry.create();
+
+    ASSERT_FALSE(registry.all_of<test::empty>(entity));
+
+    registry.emplace_or_replace<test::empty>(entity);
+
+    ASSERT_TRUE(registry.all_of<test::empty>(entity));
+
+    registry.emplace_or_replace<test::empty>(entity);
+
+    ASSERT_EQ(registry.storage<test::empty>().size(), 1u);
 }
 
 TEST(Registry, EmplaceOrReplaceAggregate) {
@@ -1474,14 +1521,27 @@ TEST(Registry, Get) {
 TEST(Registry, GetOrEmplace) {
     entt::registry registry{};
     const auto entity = registry.create();
-    const auto value = registry.get_or_emplace<int>(entity, 3);
+    const auto value = 3;
+    const auto other = 1.;
+
+    ASSERT_EQ(registry.get_or_emplace<int>(entity, value), value);
+    ASSERT_EQ(registry.get_or_emplace<double>(entity, other), other);
+
+    ASSERT_TRUE((registry.all_of<int, double>(entity)));
+
+    ASSERT_EQ(registry.get<int>(entity), value);
+    ASSERT_EQ(registry.get<double>(entity), other);
+}
+
+TEST(Registry, GetOrEmplaceEmpty) {
+    entt::registry registry{};
+    const auto entity = registry.create();
 
     // get_or_emplace must work for empty types
+    // NOLINTNEXTLINE(readability-redundant-casting)
     static_cast<void>(registry.get_or_emplace<test::empty>(entity));
 
-    ASSERT_TRUE((registry.all_of<int, test::empty>(entity)));
-    ASSERT_EQ(registry.get<int>(entity), value);
-    ASSERT_EQ(registry.get<int>(entity), 3);
+    ASSERT_TRUE((registry.all_of<test::empty>(entity)));
 }
 
 ENTT_DEBUG_TEST(RegistryDeathTest, GetOrEmplace) {

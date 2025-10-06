@@ -41,7 +41,6 @@
 			<Item Name="[arity]">arity</Item>
 			<Item Name="[is_const]">has_trait(entt::internal::meta_traits::is_const)</Item>
 			<Item Name="[is_static]">has_trait(entt::internal::meta_traits::is_static)</Item>
-			<Item Name="[prop]">prop,view(simple)</Item>
 			<Item Name="[custom]">custom</Item>
 		</Expand>
 	</Type>
@@ -61,16 +60,7 @@
 			<Item Name="[is_const]">has_trait(entt::internal::meta_traits::is_const)</Item>
 			<Item Name="[is_static]">has_trait(entt::internal::meta_traits::is_static)</Item>
 			<Item Name="[next]" Condition="next != nullptr">*next</Item>
-			<Item Name="[prop]">prop,view(simple)</Item>
 			<Item Name="[custom]">custom</Item>
-		</Expand>
-	</Type>
-	<Type Name="entt::internal::meta_prop_node">
-		<DisplayString Condition="value != nullptr">{{ key={ id } }}</DisplayString>
-		<DisplayString>{{}}</DisplayString>
-		<Expand>
-			<Item Name="[key]">id</Item>
-			<Item Name="[value]">value</Item>
 		</Expand>
 	</Type>
 	<Type Name="entt::internal::meta_template_node">
@@ -88,7 +78,6 @@
 			<Item Name="[conv]">conv,view(simple)</Item>
 			<Item Name="[data]">data,view(simple)</Item>
 			<Item Name="[func]">func,view(simple)</Item>
-			<Item Name="[prop]">prop,view(simple)</Item>
 		</Expand>
 	</Type>
 	<Type Name="entt::internal::meta_type_node">
@@ -107,9 +96,9 @@
 			<Item Name="[is_enum]">has_trait(entt::internal::meta_traits::is_enum)</Item>
 			<Item Name="[is_class]">has_trait(entt::internal::meta_traits::is_class)</Item>
 			<Item Name="[is_pointer]">has_trait(entt::internal::meta_traits::is_pointer)</Item>
-			<Item Name="[is_meta_pointer_like]">has_trait(entt::internal::meta_traits::is_meta_pointer_like)</Item>
-			<Item Name="[is_meta_sequence_container]">has_trait(entt::internal::meta_traits::is_meta_sequence_container)</Item>
-			<Item Name="[is_meta_associative_container]">has_trait(entt::internal::meta_traits::is_meta_associative_container)</Item>
+			<Item Name="[is_pointer_like]">has_trait(entt::internal::meta_traits::is_pointer_like)</Item>
+			<Item Name="[is_sequence_container]">has_trait(entt::internal::meta_traits::is_sequence_container)</Item>
+			<Item Name="[is_associative_container]">has_trait(entt::internal::meta_traits::is_associative_container)</Item>
 			<Item Name="[default_constructor]">default_constructor != nullptr</Item>
 			<Item Name="[conversion_helper]">conversion_helper != nullptr</Item>
 			<Item Name="[from_void]">from_void != nullptr</Item>
@@ -150,27 +139,25 @@
 			<Item Name="[data]">data</Item>
 		</Expand>
 	</Type>
+	<Type Name="entt::meta_custom">
+		<DisplayString>{ node }</DisplayString>
+		<Expand>
+			<ExpandedItem>node</ExpandedItem>
+		</Expand>
+	</Type>
 	<Type Name="entt::meta_data">
-		<DisplayString Condition="node != nullptr">{ *node }</DisplayString>
+		<DisplayString Condition="node.get != nullptr">{ node }</DisplayString>
 		<DisplayString>{{}}</DisplayString>
 		<Expand>
-			<ExpandedItem Condition="node != nullptr">node</ExpandedItem>
+			<ExpandedItem Condition="node.get != nullptr">node</ExpandedItem>
 			<Item Name="[context]" Condition="ctx != nullptr">ctx->value</Item>
 		</Expand>
 	</Type>
 	<Type Name="entt::meta_func">
-		<DisplayString Condition="node != nullptr">{ *node }</DisplayString>
+		<DisplayString Condition="node.invoke != nullptr">{ node }</DisplayString>
 		<DisplayString>{{}}</DisplayString>
 		<Expand>
-			<ExpandedItem Condition="node != nullptr">node</ExpandedItem>
-			<Item Name="[context]" Condition="ctx != nullptr">ctx->value</Item>
-		</Expand>
-	</Type>
-	<Type Name="entt::meta_prop">
-		<DisplayString Condition="node.type != nullptr">{ node }</DisplayString>
-		<DisplayString>{{}}</DisplayString>
-		<Expand>
-			<ExpandedItem Condition="node.type != nullptr">node</ExpandedItem>
+			<ExpandedItem Condition="node.invoke != nullptr">node</ExpandedItem>
 			<Item Name="[context]" Condition="ctx != nullptr">ctx->value</Item>
 		</Expand>
 	</Type>
